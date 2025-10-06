@@ -199,7 +199,7 @@ static int cam_tfe_mgr_get_hw_caps_internal(void *hw_mgr_priv,
 	for (i = 0; i < CAM_TFE_CSID_HW_NUM_MAX; i++) {
 		if (!hw_mgr->csid_devices[i])
 			break;
-		if (query_isp->num_dev < i)
+		if (i >= query_isp->num_dev)
 			return -EINVAL;
 
 		query_isp->dev_caps[i].hw_type = CAM_ISP_TFE_HW_TFE;
@@ -6765,6 +6765,10 @@ static int cam_tfe_hw_mgr_handle_csid_event(
 				event_info->hw_idx, err_type, tfe_hw_mgr_ctx->try_recovery_cnt,
 				tfe_hw_mgr_ctx->recovery_req_id);
 		}
+		break;
+	}
+	case CAM_ISP_HW_ERROR_CSID_PKT_PAYLOAD_CORRUPTED: {
+		error_event_data.error_type = err_type;
 		break;
 	}
 	default:
