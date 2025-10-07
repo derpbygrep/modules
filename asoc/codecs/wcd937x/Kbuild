@@ -26,7 +26,7 @@ ifeq ($(KERNEL_BUILD), 0)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
 	endif
-	ifeq ($(CONFIG_ARCH_BENGAL), y)
+	ifeq ($(CONFIG_ARCH_KHAJE), y)
 		include $(AUDIO_ROOT)/config/bengalauto.conf
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/bengalautoconf.h
@@ -35,6 +35,22 @@ ifeq ($(KERNEL_BUILD), 0)
 		include $(AUDIO_ROOT)/config/litoauto.conf
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_WAIPIO), y)
+		include $(AUDIO_ROOT)/config/waipioauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/waipioautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_HOLI), y)
+		include $(AUDIO_ROOT)/config/holiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/holiautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_BLAIR), y)
+		include $(AUDIO_ROOT)/config/holiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/holiautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_CLIFFS), y)
+		include $(AUDIO_ROOT)/config/pineappleauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/pineappleautoconf.h
 	endif
 endif
 
@@ -55,7 +71,7 @@ endif
 # config.
 
 ############ UAPI ############
-UAPI_DIR :=	uapi
+UAPI_DIR :=	uapi/audio
 UAPI_INC :=	-I$(AUDIO_ROOT)/include/$(UAPI_DIR)
 
 ############ COMMON ############
@@ -109,13 +125,6 @@ ifeq ($(call cc-option-yn, -Wheader-guard),y)
 EXTRA_CFLAGS += -Wheader-guard
 endif
 
-ifeq ($(KERNEL_BUILD), 0)
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/ipc/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/dsp/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module.symvers
-endif
 
 # Module information used by KBuild framework
 obj-$(CONFIG_SND_SOC_WCD937X) += wcd937x_dlkm.o

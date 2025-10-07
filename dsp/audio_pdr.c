@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2016-2017, 2020 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
 #include <linux/slab.h>
 #include "audio_pdr.h"
-
 
 struct audio_pdr_service {
 	void *pdr_handle;
@@ -24,7 +22,6 @@ static struct audio_pdr_service audio_pdr_services[AUDIO_PDR_DOMAIN_MAX] = {
 
 void *audio_pdr_service_register(int domain_id, void (*cb)(int, char *, void *))
 {
-
 	if ((domain_id < 0) ||
 	    (domain_id >= AUDIO_PDR_DOMAIN_MAX)) {
 		pr_err("%s: Invalid service ID %d\n", __func__, domain_id);
@@ -34,17 +31,17 @@ void *audio_pdr_service_register(int domain_id, void (*cb)(int, char *, void *))
 	audio_pdr_services[domain_id].pdr_handle = pdr_handle_alloc(cb, NULL);
 
 	return pdr_add_lookup(audio_pdr_services[domain_id].pdr_handle,
-						  audio_pdr_services[domain_id].service_name,
-						  audio_pdr_services[domain_id].service_path);
+			      audio_pdr_services[domain_id].service_name,
+			      audio_pdr_services[domain_id].service_path);
 }
 EXPORT_SYMBOL(audio_pdr_service_register);
 
 int audio_pdr_service_deregister(int domain_id)
 {
 	if ((domain_id < 0) ||
-		(domain_id >= AUDIO_PDR_DOMAIN_MAX)) {
-			pr_err("%s: Invalid service ID %d\n", __func__, domain_id);
-			return -EINVAL;
+	    (domain_id >= AUDIO_PDR_DOMAIN_MAX)) {
+		pr_err("%s: Invalid service ID %d\n", __func__, domain_id);
+		return -EINVAL;
 	}
 	pdr_handle_release(audio_pdr_services[domain_id].pdr_handle);
 
@@ -60,6 +57,7 @@ module_init(audio_pdr_late_init);
 
 static void __exit audio_pdr_late_exit(void)
 {
+
 }
 module_exit(audio_pdr_late_exit);
 

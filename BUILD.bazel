@@ -15,23 +15,19 @@ ddk_headers(
         "include/ipc/*.h",
         "include/soc/*.h"
     ]),
-    includes = ["include", "include/uapi"]
+    includes = ["include"]
 )
 ddk_headers(
     name = "audio_uapi_headers",
     hdrs = glob([
-        "include/uapi/audio/**/*.h",
-	"include/uapi/**/*.h",
-	"include/uapi/**/**/**/*.h",
-	"include/**/**/**/**/*.h"
+        "include/uapi/audio/**/*.h"
     ]),
-    includes = ["include", "include/uapi", "include/uapi/audio"]
+    includes = ["include/uapi/audio"]
 )
 ddk_headers(
     name = "audio_src_headers",
     hdrs = glob([
         "asoc/**/*.h",
-	"asoc/*.h",
         "dsp/**/*.h",
         "ipc/**/*.h",
         "soc/**/*.h"
@@ -49,8 +45,6 @@ ddk_headers(
     hdrs = [":audio_common_headers",  ":audio_uapi_headers", ":audio_src_headers", ":audio_configs"]
 )
 
-load(":build/mdm9607.bzl", "define_mdm9607")
+load(":build/audio_target.bzl", "define_audio_target")
 
-define_mdm9607()
-
-
+define_audio_target()
