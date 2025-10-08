@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2014, 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -11,7 +11,7 @@
 #include <linux/string.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
-#include <ipc/apr.h>
+#include <dsp/spf-core.h>
 #include <linux/of_device.h>
 #include <linux/sysfs.h>
 #include <linux/workqueue.h>
@@ -19,17 +19,25 @@
 #include <linux/slab.h>
 #include <linux/remoteproc.h>
 #include <linux/remoteproc/qcom_rproc.h>
-#include <linux/remoteproc.h>
-#include <linux/version.h>
-#include <soc/qcom/boot_stats.h>
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
+#include <soc/oplus/system/oplus_mm_kevent_fb.h>
+#define OPLUS_AUDIO_EVENTID_AUDIO_DAEMON     10050
+#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
 
 #define Q6_PIL_GET_DELAY_MS 100
 #define BOOT_CMD 1
 #define SSR_RESET_CMD 1
 #define IMAGE_UNLOAD_CMD 0
 #define MAX_FW_IMAGES 4
-#define BOOT_FOR_EARLY_CHIME_CMD 2
+#define ADSP_LOADER_APM_TIMEOUT_MS 10000
+
+enum spf_subsys_state {
+	SPF_SUBSYS_DOWN,
+	SPF_SUBSYS_UP,
+	SPF_SUBSYS_LOADED,
+	SPF_SUBSYS_UNKNOWN,
+};
 
 static ssize_t adsp_boot_store(struct kobject *kobj,
 	struct kobj_attribute *attr,
@@ -44,6 +52,7 @@ struct adsp_loader_private {
 	struct kobject *boot_adsp_obj;
 	struct attribute_group *attr_group;
 	char *adsp_fw_name;
+	char *adsp_dtb_name;
 };
 
 static struct kobj_attribute adsp_boot_attribute =
@@ -61,35 +70,7 @@ static struct attribute *attrs[] = {
 static struct work_struct adsp_ldr_work;
 static struct platform_device *adsp_private;
 static void adsp_loader_unload(struct platform_device *pdev);
-static void adsp_loader_do(struct platform_device *pdev);
 
-static void adsp_load_state_notify_cb(enum apr_subsys_state state,
-		void *phandle)
-{
-	struct platform_device *pdev = adsp_private;
-	struct adsp_loader_private *priv = NULL;
-	struct rproc *adsp_dev = NULL;
-
-	priv = platform_get_drvdata(pdev);
-	if (!priv)
-		return;
-	if (phandle != adsp_private) {
-		dev_err(&pdev->dev, "%s: callback is not for adsp-loader client\n", __func__);
-		return;
-	}
-	dev_dbg(&pdev->dev, "%s: Received cb for ADSP restart\n", __func__);
-	if (state == APR_SUBSYS_UNKNOWN) {
-		adsp_dev = (struct rproc *)priv->pil_h;
-		if (!adsp_dev)
-			return;
-
-		rproc_shutdown(adsp_dev);
-		adsp_loader_do(adsp_private);
-		dev_dbg(&pdev->dev, "%s: ADSP restarted\n", __func__);
-	}
-	else
-		dev_dbg(&pdev->dev, "%s: Ignore restart request for ADSP\n", __func__);
-}
 
 static void adsp_load_fw(struct work_struct *adsp_ldr_work)
 {
@@ -100,10 +81,8 @@ static void adsp_load_fw(struct work_struct *adsp_ldr_work)
 	u32 adsp_state;
 	struct property *prop;
 	int size;
-	phandle rproc_handle;
+	phandle rproc_phandle;
 	struct rproc *rproc;
-	void *padsp_restart_cb = &adsp_load_state_notify_cb;
-	const char *image;
 
 	if (!pdev) {
 		dev_err(&pdev->dev, "%s: Platform device null\n", __func__);
@@ -119,7 +98,7 @@ static void adsp_load_fw(struct work_struct *adsp_ldr_work)
 	priv = platform_get_drvdata(pdev);
 	if (!priv) {
 		dev_err(&pdev->dev,
-				" %s: Private data get failed\n", __func__);
+		" %s: Private data get failed\n", __func__);
 		goto fail;
 	}
 
@@ -130,30 +109,22 @@ static void adsp_load_fw(struct work_struct *adsp_ldr_work)
 		goto fail;
 	}
 
-	prop = of_find_property(pdev->dev.of_node, "qcom,rproc-handle",
+	prop = of_find_property(pdev->dev.of_node, "qcom,proc-img-to-load",
 					&size);
 	if (!prop) {
-		dev_err(&pdev->dev, "Missing remoteproc handle\n");
-		goto fail;
+		dev_dbg(&pdev->dev,
+			"%s: loading default image ADSP\n", __func__);
+		goto load_adsp;
 	}
 
-	rproc_handle = be32_to_cpup(prop->value);
-	priv->pil_h = rproc_get_by_phandle(rproc_handle);
+	rproc_phandle = be32_to_cpup(prop->value);
+	priv->pil_h = rproc_get_by_phandle(rproc_phandle);
 	if (!priv->pil_h)
 		goto fail;
 
 	rproc = priv->pil_h;
-	rc = of_property_read_string(pdev->dev.of_node,
-			"qcom,proc-img-to-load",
-			&image);
-	if (rc) {
-		dev_err(&pdev->dev,
-			"%s: loading default image ADSP\n", __func__);
-		goto load_adsp;
-	}
-	if (!strcmp(image, "modem")) {
-		adsp_state = apr_get_modem_state();
-		if (adsp_state == APR_SUBSYS_DOWN) {
+	if (!strcmp(rproc->name, "modem")) {
+		if (adsp_state == SPF_SUBSYS_DOWN) {
 			rc = rproc_boot(priv->pil_h);
 			if (IS_ERR(priv->pil_h) || rc) {
 				dev_err(&pdev->dev, "%s: pil get failed,\n",
@@ -161,42 +132,61 @@ static void adsp_load_fw(struct work_struct *adsp_ldr_work)
 				goto fail;
 			}
 
-			/* Set the state of the ADSP in APR driver */
-			apr_set_modem_state(APR_SUBSYS_LOADED);
-		} else if (adsp_state == APR_SUBSYS_LOADED) {
+		} else if (adsp_state == SPF_SUBSYS_LOADED) {
 			dev_dbg(&pdev->dev,
 			"%s: MDSP state = %x\n", __func__, adsp_state);
 		}
 
 		dev_dbg(&pdev->dev, "%s: Q6/MDSP image is loaded\n", __func__);
-		return;
 	}
 
 load_adsp:
 	{
-		adsp_state = apr_get_q6_state();
-		if (adsp_state == APR_SUBSYS_DOWN) {
-#if (KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE)
-			place_marker("M - Start ADSP");
-#else
-			pr_err("boot_kpi: M - Start ADSP\n");
-#endif
+		adsp_state = spf_core_is_apm_ready(ADSP_LOADER_APM_TIMEOUT_MS);
+		if (adsp_state == SPF_SUBSYS_DOWN) {
+			if (!priv->adsp_fw_name) {
+				dev_info(&pdev->dev, "%s: Load default ADSP\n",
+					__func__);
+			} else {
+				dev_info(&pdev->dev, "%s: Load ADSP with fw name %s\n",
+					__func__, priv->adsp_fw_name);
+				rc = rproc_set_firmware(priv->pil_h,
+					priv->adsp_fw_name);
+				if (rc) {
+					dev_err(&pdev->dev, "%s: rproc set firmware failed,\n",
+						__func__);
+					goto fail;
+				}
+			}
+			if (!priv->adsp_dtb_name) {
+				dev_info(&pdev->dev, "%s: Load default ADSP DTB\n",
+					__func__);
+			} else {
+				dev_info(&pdev->dev, "%s: Load ADSP DTB with fw name %s\n",
+					__func__, priv->adsp_dtb_name);
+				rc = qcom_rproc_set_dtb_firmware(priv->pil_h,
+					priv->adsp_dtb_name);
+				if (rc) {
+					dev_err(&pdev->dev, "%s: rproc set dtb firmware failed,\n",
+						__func__);
+					goto fail;
+				}
+			}
 			rc = rproc_boot(priv->pil_h);
-
 			if (rc) {
 				dev_err(&pdev->dev, "%s: pil get failed,\n",
 					__func__);
 				goto fail;
 			}
-		} else if (adsp_state == APR_SUBSYS_LOADED) {
+		} else if (adsp_state == SPF_SUBSYS_LOADED) {
 			dev_dbg(&pdev->dev,
-			"%s: ADSP state = %x\n", __func__, adsp_state);
+				"%s: ADSP state = %x\n", __func__, adsp_state);
 		}
 
 		dev_dbg(&pdev->dev, "%s: Q6/ADSP image is loaded\n", __func__);
-		apr_register_adsp_state_cb(padsp_restart_cb, adsp_private);
 		return;
 	}
+
 fail:
 	dev_err(&pdev->dev, "%s: Q6 image loading failed\n", __func__);
 }
@@ -216,6 +206,10 @@ static ssize_t adsp_ssr_store(struct kobject *kobj,
 	struct platform_device *pdev = adsp_private;
 	struct adsp_loader_private *priv = NULL;
 
+	if (!pdev) {
+		pr_err("%s: Platform device null\n", __func__);
+		return -EINVAL;
+	}
 	dev_dbg(&pdev->dev, "%s: going to call adsp ssr\n ", __func__);
 
 	priv = platform_get_drvdata(pdev);
@@ -232,14 +226,56 @@ static ssize_t adsp_ssr_store(struct kobject *kobj,
 	if (!adsp_dev)
 		return -EINVAL;
 
-	dev_err(&pdev->dev, "Requesting for ADSP restart\n");
+	dev_err(&pdev->dev, "requesting for ADSP restart\n");
 
 	rproc_shutdown(adsp_dev);
 	adsp_loader_do(adsp_private);
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
+	mm_fb_audio_kevent_named_delay(OPLUS_AUDIO_EVENTID_AUDIO_DAEMON, \
+		MM_FB_KEY_RATELIMIT_5MIN, 2, "FieldData@@APPS requesting for ADSP restart$$detailData@@audio$$module@@adsp");
+#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+
 	dev_dbg(&pdev->dev, "%s :: ADSP restarted\n", __func__);
 	return count;
 }
+
+#ifdef OPLUS_ARCH_EXTENDS
+bool oplus_daemon_adsp_ssr(void)
+{
+	struct rproc *adsp_dev = NULL;
+	struct platform_device *pdev = adsp_private;
+	struct adsp_loader_private *priv = NULL;
+
+	if (!pdev) {
+		pr_err("%s: Platform device null\n", __func__);
+		return false;
+	}
+	dev_dbg(&pdev->dev, "%s: going to call adsp ssr\n", __func__);
+
+	priv = platform_get_drvdata(pdev);
+	if (!priv)
+		return false;
+
+	adsp_dev = (struct rproc *)priv->pil_h;
+	if (!adsp_dev)
+		return false;
+
+	dev_err(&pdev->dev, "%s: requesting for ADSP restart\n", __func__);
+
+	rproc_shutdown(adsp_dev);
+	adsp_loader_do(adsp_private);
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
+	mm_fb_audio_kevent_named_delay(OPLUS_AUDIO_EVENTID_AUDIO_DAEMON, \
+		MM_FB_KEY_RATELIMIT_5MIN, 2, "FieldData@@oplus daemon requesting for ADSP restart$$detailData@@audio$$module@@adsp");
+#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+
+	dev_dbg(&pdev->dev, "%s :: ADSP restarted\n", __func__);
+	return true;
+}
+EXPORT_SYMBOL(oplus_daemon_adsp_ssr);
+#endif /* OPLUS_ARCH_EXTENDS */
 
 static ssize_t adsp_boot_store(struct kobject *kobj,
 	struct kobj_attribute *attr,
@@ -259,11 +295,7 @@ static ssize_t adsp_boot_store(struct kobject *kobj,
 	} else if (boot == IMAGE_UNLOAD_CMD) {
 		pr_debug("%s: going to call adsp_unloader\n", __func__);
 		adsp_loader_unload(adsp_private);
-	} else if (boot == BOOT_FOR_EARLY_CHIME_CMD) {
-		pr_debug("%s: going to call adsp_load_fw\n", __func__);
-		adsp_load_fw(NULL);
 	}
-
 	return count;
 }
 
@@ -278,7 +310,6 @@ static void adsp_loader_unload(struct platform_device *pdev)
 
 	if (priv->pil_h) {
 		rproc_shutdown(priv->pil_h);
-		priv->pil_h = NULL;
 	}
 }
 
@@ -367,6 +398,7 @@ static int adsp_loader_probe(struct platform_device *pdev)
 	size_t len;
 	u32 *buf;
 	const char **adsp_fw_name_array = NULL;
+	const char **adsp_dtb_fw_name_array = NULL;
 	int adsp_fw_cnt;
 	u32* adsp_fw_bit_values = NULL;
 	int i;
@@ -375,14 +407,35 @@ static int adsp_loader_probe(struct platform_device *pdev)
 	int ret = 0;
 	u32 adsp_fuse_not_supported = 0;
 	const char *adsp_fw_name;
+	const char *adsp_dtb_name;
+	struct property *prop;
+	int size;
+	phandle rproc_phandle;
+	struct rproc *adsp;
+
+	prop = of_find_property(pdev->dev.of_node, "qcom,rproc-handle",
+				&size);
+	if (!prop) {
+		dev_err(&pdev->dev, "Missing remotproc handle\n");
+		return -ENOPARAM;
+	}
+	rproc_phandle = be32_to_cpup(prop->value);
+	adsp = rproc_get_by_phandle(rproc_phandle);
+	if (!adsp) {
+		dev_err(&pdev->dev, "fail to get rproc\n");
+		return -EPROBE_DEFER;
+	}
 
 	ret = adsp_loader_init_sysfs(pdev);
 	if (ret != 0) {
 		dev_err(&pdev->dev, "%s: Error in initing sysfs\n", __func__);
+		rproc_put(adsp);
 		return ret;
 	}
 
 	priv = platform_get_drvdata(pdev);
+	priv->pil_h = adsp;
+
 	/* get adsp variant idx */
 	cell = nvmem_cell_get(&pdev->dev, "adsp_variant");
 	if (IS_ERR_OR_NULL(cell)) {
@@ -423,6 +476,24 @@ static int adsp_loader_probe(struct platform_device *pdev)
 				goto wqueue;
 			strlcpy(priv->adsp_fw_name, adsp_fw_name,
 				fw_name_size);
+
+			ret = of_property_read_string(pdev->dev.of_node,
+						"adsp-dtb-name",
+						 &adsp_dtb_name);
+			if (ret < 0) {
+				dev_dbg(&pdev->dev, "%s: unable to read fw-dtb-name\n",
+					__func__);
+				goto wqueue;
+			}
+
+			fw_name_size = strlen(adsp_dtb_name) + 1;
+			priv->adsp_dtb_name = devm_kzalloc(&pdev->dev,
+						fw_name_size,
+						GFP_KERNEL);
+			if (!priv->adsp_dtb_name)
+				goto wqueue;
+			strscpy(priv->adsp_dtb_name, adsp_dtb_name,
+				fw_name_size);
 		}
 		goto wqueue;
 	}
@@ -439,6 +510,8 @@ static int adsp_loader_probe(struct platform_device *pdev)
 		goto wqueue;
 	}
 	memcpy(&adsp_var_idx, buf, len);
+	dev_info(&pdev->dev, "%s: adsp variant fuse reg value: 0x%x\n",
+		__func__, adsp_var_idx);
 	kfree(buf);
 
 	/* Get count of fw images */
@@ -482,6 +555,20 @@ static int adsp_loader_probe(struct platform_device *pdev)
 		goto wqueue;
 	}
 
+	adsp_dtb_fw_name_array = devm_kzalloc(&pdev->dev,
+				adsp_fw_cnt * sizeof(char *), GFP_KERNEL);
+
+	/* Read ADSP dtb firmware image names */
+	ret = of_property_read_string_array(pdev->dev.of_node,
+					"adsp-dtb-fw-names",
+					adsp_dtb_fw_name_array,
+					adsp_fw_cnt);
+	if (ret < 0) {
+		dev_dbg(&pdev->dev, "%s: unable to read adsp-dtb-fw-names\n",
+			__func__);
+		goto wqueue;
+	}
+
 	for (i = 0; i < adsp_fw_cnt; i++) {
 		if (adsp_fw_bit_values[i] == adsp_var_idx) {
 			fw_name_size = strlen(adsp_fw_name_array[i]) + 1;
@@ -492,6 +579,15 @@ static int adsp_loader_probe(struct platform_device *pdev)
 				goto wqueue;
 			strlcpy(priv->adsp_fw_name, adsp_fw_name_array[i],
 				fw_name_size);
+
+			fw_name_size = strlen(adsp_dtb_fw_name_array[i]) + 1;
+			priv->adsp_dtb_name = devm_kzalloc(&pdev->dev,
+						fw_name_size,
+						GFP_KERNEL);
+			if (!priv->adsp_dtb_name)
+				goto wqueue;
+			strscpy(priv->adsp_dtb_name, adsp_dtb_fw_name_array[i],
+				fw_name_size);
 			break;
 		}
 	}
@@ -501,6 +597,7 @@ wqueue:
 		devm_kfree(&pdev->dev, adsp_fw_bit_values);
 	if (adsp_fw_name_array)
 		devm_kfree(&pdev->dev, adsp_fw_name_array);
+
 	return 0;
 
 }
