@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+/* Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -11,16 +11,15 @@
 #include <linux/of.h>
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
-#ifndef CONFIG_ARCH_MDM9607
-#include "../../../drivers/clk/qcom/common.h"
-#endif
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <bindings/qcom,audio-ext-clk.h>
 #include <linux/ratelimit.h>
-#include <dsp/q6afe-v2.h>
+#ifdef CONFIG_AUDIO_PRM
+#include <dsp/audio_prm.h>
+#else
 #include "audio-ext-clk-up.h"
-
+#endif
 enum {
 	AUDIO_EXT_CLK_PMI,
 	AUDIO_EXT_CLK_LNBB2,
@@ -34,6 +33,14 @@ enum {
 	AUDIO_EXT_CLK_LPASS_CORE_HW_VOTE,
 	AUDIO_EXT_CLK_LPASS8,
 	AUDIO_EXT_CLK_LPASS_AUDIO_HW_VOTE,
+	AUDIO_EXT_CLK_LPASS9,
+	AUDIO_EXT_CLK_LPASS10,
+	AUDIO_EXT_CLK_LPASS11,
+	AUDIO_EXT_CLK_LPASS12,
+	AUDIO_EXT_CLK_LPASS13,
+	AUDIO_EXT_CLK_LPASS14,
+	AUDIO_EXT_CLK_LPASS15,
+	AUDIO_EXT_CLK_LPASS16,
 	AUDIO_EXT_CLK_LPASS_MAX,
 	AUDIO_EXT_CLK_EXTERNAL_PLL = AUDIO_EXT_CLK_LPASS_MAX,
 	AUDIO_EXT_CLK_MAX,
@@ -54,14 +61,15 @@ struct audio_ext_clk {
 struct audio_ext_clk_priv {
 	struct device *dev;
 	int clk_src;
-	struct afe_clk_set clk_cfg;
+	uint32_t enable;
+#ifdef CONFIG_AUDIO_PRM
+	struct clk_cfg prm_clk_cfg;
+#endif
 	struct audio_ext_clk audio_clk;
 	const char *clk_name;
 	uint32_t lpass_core_hwvote_client_handle;
 	uint32_t lpass_audio_hwvote_client_handle;
 };
-
-static struct audio_ext_clk audio_clk_array[];
 
 static inline struct audio_ext_clk_priv *to_audio_clk(struct clk_hw *hw)
 {
@@ -76,17 +84,21 @@ static int audio_ext_clk_prepare(struct clk_hw *hw)
 	static DEFINE_RATELIMIT_STATE(rtl, 1 * HZ, 1);
 
 	if ((clk_priv->clk_src >= AUDIO_EXT_CLK_LPASS) &&
-		(clk_priv->clk_src < AUDIO_EXT_CLK_LPASS_MAX))  {
-		clk_priv->clk_cfg.enable = 1;
-		trace_printk("%s: vote for %d clock\n",
-			__func__, clk_priv->clk_src);
-		ret = afe_set_lpass_clk_cfg(IDX_RSVD_3, &clk_priv->clk_cfg);
+		(clk_priv->clk_src < AUDIO_EXT_CLK_LPASS_MAX) && !clk_priv->enable)  {
+#ifdef CONFIG_AUDIO_PRM
+	    pr_debug("%s: clk_id %x ", __func__, clk_priv->prm_clk_cfg.clk_id);
+		ret = audio_prm_set_lpass_clk_cfg(&clk_priv->prm_clk_cfg,1);
+#else
+		pr_debug("%s: audio prm not enabled", __func__);
+		ret = -EPERM;
+#endif
 		if (ret < 0) {
 			if (__ratelimit(&rtl))
-				pr_err_ratelimited("%s afe_set_digital_codec_core_clock failed\n",
+				pr_err_ratelimited("%s prm set lpass clk failed\n",
 				__func__);
 			return ret;
 		}
+		clk_priv->enable = 1;
 	}
 
 	if (pnctrl_info->pinctrl) {
@@ -123,13 +135,18 @@ static void audio_ext_clk_unprepare(struct clk_hw *hw)
 
 	if ((clk_priv->clk_src >= AUDIO_EXT_CLK_LPASS) &&
 		(clk_priv->clk_src < AUDIO_EXT_CLK_LPASS_MAX))  {
-		clk_priv->clk_cfg.enable = 0;
-		trace_printk("%s: unvote for %d clock\n",
-			__func__, clk_priv->clk_src);
-		ret = afe_set_lpass_clk_cfg(IDX_RSVD_3, &clk_priv->clk_cfg);
+		clk_priv->enable = 0;
+#ifdef CONFIG_AUDIO_PRM
+		pr_debug("%s: clk_id %x", __func__,
+				clk_priv->prm_clk_cfg.clk_id);
+		ret = audio_prm_set_lpass_clk_cfg(&clk_priv->prm_clk_cfg, 0);
+#else
+		pr_debug("%s: audio prm not enabled", __func__);
+		ret = -EPERM;
+#endif
 		if (ret < 0) {
 			if (__ratelimit(&rtl))
-				pr_err_ratelimited("%s: afe_set_lpass_clk_cfg failed, ret = %d\n",
+				pr_err_ratelimited("%s: unset lpass clk cfg failed, ret = %d\n",
 				__func__, ret);
 		}
 	}
@@ -142,8 +159,8 @@ static u8 audio_ext_clk_get_parent(struct clk_hw *hw)
 {
 	struct audio_ext_clk_priv *clk_priv = to_audio_clk(hw);
 	int num_parents = clk_hw_get_num_parents(hw);
-	const char * const *parent_names = audio_clk_array[clk_priv->clk_src].fact.hw.init->parent_names;
-	u8 i = 0, ret = num_parents + 1;
+	const char * const *parent_names = hw->init->parent_names;
+	u8 i = 0, ret = hw->init->num_parents + 1;
 
 	if ((clk_priv->clk_src == AUDIO_EXT_CLK_PMI) && clk_priv->clk_name) {
 		for (i = 0; i < num_parents; i++) {
@@ -163,24 +180,31 @@ static int lpass_hw_vote_prepare(struct clk_hw *hw)
 	static DEFINE_RATELIMIT_STATE(rtl, 1 * HZ, 1);
 
 	if (clk_priv->clk_src == AUDIO_EXT_CLK_LPASS_CORE_HW_VOTE)  {
-		trace_printk("%s: vote for %d clock\n",
-			__func__, clk_priv->clk_src);
-		ret = afe_vote_lpass_core_hw(AFE_LPASS_CORE_HW_MACRO_BLOCK,
-			"LPASS_HW_MACRO",
-			&clk_priv->lpass_core_hwvote_client_handle);
+#ifdef CONFIG_AUDIO_PRM
+		pr_debug("%s: core vote clk_id %x \n", __func__, clk_priv->prm_clk_cfg.clk_id);
+		ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg,
+			HW_CORE_ID_LPASS, 1);
+#else
+		pr_debug("%s: audio prm not enabled", __func__);
+		ret = -EPERM;
+#endif
 		if (ret < 0) {
-			pr_err("%s lpass core hw vote failed %d\n",
-				__func__, ret);
+			if (__ratelimit(&rtl))
+				pr_err("%s lpass core hw vote failed %d\n",
+					__func__, ret);
 			return ret;
 		}
 	}
 
 	if (clk_priv->clk_src == AUDIO_EXT_CLK_LPASS_AUDIO_HW_VOTE)  {
-		trace_printk("%s: vote for %d clock\n",
-			__func__, clk_priv->clk_src);
-		ret = afe_vote_lpass_core_hw(AFE_LPASS_CORE_HW_DCODEC_BLOCK,
-			"LPASS_HW_DCODEC",
-			&clk_priv->lpass_audio_hwvote_client_handle);
+#ifdef CONFIG_AUDIO_PRM
+		pr_debug("%s: audio vote clk_id %x \n", __func__, clk_priv->prm_clk_cfg.clk_id);
+		ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg,
+			HW_CORE_ID_DCODEC, 1);
+#else
+		pr_debug("%s: audio prm not enabled", __func__);
+		ret = -EPERM;
+#endif
 		if (ret < 0) {
 			if (__ratelimit(&rtl))
 				pr_err("%s lpass audio hw vote failed %d\n",
@@ -198,11 +222,14 @@ static void lpass_hw_vote_unprepare(struct clk_hw *hw)
 	int ret = 0;
 
 	if (clk_priv->clk_src == AUDIO_EXT_CLK_LPASS_CORE_HW_VOTE) {
-		trace_printk("%s: unvote for %d clock\n",
-			__func__, clk_priv->clk_src);
-		ret = afe_unvote_lpass_core_hw(
-			AFE_LPASS_CORE_HW_MACRO_BLOCK,
-			clk_priv->lpass_core_hwvote_client_handle);
+#ifdef CONFIG_AUDIO_PRM
+		pr_debug("%s: core vote clk_id %x \n", __func__, clk_priv->prm_clk_cfg.clk_id);
+		ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg,
+				HW_CORE_ID_LPASS, 0);
+#else
+		pr_debug("%s: audio prm not enabled", __func__);
+		ret = -EPERM;
+#endif
 		if (ret < 0) {
 			pr_err("%s lpass core hw vote failed %d\n",
 				__func__, ret);
@@ -210,11 +237,15 @@ static void lpass_hw_vote_unprepare(struct clk_hw *hw)
 	}
 
 	if (clk_priv->clk_src == AUDIO_EXT_CLK_LPASS_AUDIO_HW_VOTE) {
-		trace_printk("%s: unvote for %d clock\n",
-			__func__, clk_priv->clk_src);
-		ret = afe_unvote_lpass_core_hw(
-			AFE_LPASS_CORE_HW_DCODEC_BLOCK,
-			clk_priv->lpass_audio_hwvote_client_handle);
+
+#ifdef CONFIG_AUDIO_PRM
+		pr_debug("%s: audio vote clk_id %x \n", __func__, clk_priv->prm_clk_cfg.clk_id);
+		ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg,
+				HW_CORE_ID_DCODEC, 0);
+#else
+		pr_debug("%s: audio prm not enabled", __func__);
+		ret = -EPERM;
+#endif
 		if (ret < 0) {
 			pr_err("%s lpass audio hw unvote failed %d\n",
 				__func__, ret);
@@ -396,6 +427,94 @@ static struct audio_ext_clk audio_clk_array[] = {
 			.mult = 1,
 			.div = 1,
 			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk9",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk10",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk11",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk12",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk13",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk14",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk15",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk16",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
 				.name = "audio_external_pll_clk",
 				.ops = &audio_ext_clk_ops,
 			},
@@ -548,28 +667,39 @@ static int audio_ref_clk_probe(struct platform_device *pdev)
 	memcpy(&clk_priv->audio_clk, &audio_clk_array[clk_src],
 		   sizeof(struct audio_ext_clk));
 
-	/* Init lpass clk default values */
-	clk_priv->clk_cfg.clk_set_minor_version =
-					Q6AFE_LPASS_CLK_CONFIG_API_VERSION;
-	clk_priv->clk_cfg.clk_id = Q6AFE_LPASS_CLK_ID_SPEAKER_I2S_OSR;
-	clk_priv->clk_cfg.clk_freq_in_hz = Q6AFE_LPASS_OSR_CLK_9_P600_MHZ;
-	clk_priv->clk_cfg.clk_attri = Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO;
+#ifdef CONFIG_AUDIO_PRM
+	/* Init prm clk cfg default values */
+	clk_priv->prm_clk_cfg.clk_id = CLOCK_ID_QUI_MI2S_OSR;
+	clk_priv->prm_clk_cfg.clk_freq_in_hz = OSR_CLOCK_9_P600_MHZ;
+	clk_priv->prm_clk_cfg.clk_attri = CLOCK_ATTRIBUTE_COUPLE_NO;
+	clk_priv->prm_clk_cfg.clk_root = 0;
+#endif
 
 	ret = of_property_read_u32(pdev->dev.of_node,
 			"qcom,codec-lpass-ext-clk-freq",
 			&clk_freq);
-	if (!ret)
-		clk_priv->clk_cfg.clk_freq_in_hz = clk_freq;
+	if (!ret) {
+#ifdef CONFIG_AUDIO_PRM
+		clk_priv->prm_clk_cfg.clk_freq_in_hz = clk_freq;
+#endif
+	}
 
 	ret = of_property_read_u32(pdev->dev.of_node,
 			"qcom,codec-lpass-clk-id",
 			&clk_id);
-	if (!ret)
-		clk_priv->clk_cfg.clk_id = clk_id;
+	if (!ret) {
+#ifdef CONFIG_AUDIO_PRM
+		clk_priv->prm_clk_cfg.clk_id = clk_id;
+		dev_dbg(&pdev->dev, "%s: PRM ext-clk freq: %d, lpass clk_id: %d, clk_src: %d\n",
+			__func__, clk_priv->prm_clk_cfg.clk_freq_in_hz,
+			clk_priv->prm_clk_cfg.clk_id, clk_priv->clk_src);
+#endif
+	}
 
-	dev_dbg(&pdev->dev, "%s: ext-clk freq: %d, lpass clk_id: %d, clk_src: %d\n",
-			__func__, clk_priv->clk_cfg.clk_freq_in_hz,
-			clk_priv->clk_cfg.clk_id, clk_priv->clk_src);
+        dev_dbg(&pdev->dev, "%s: PRM2 ext-clk freq: %d, lpass clk_id: %d, clk_src: %d\n",
+                        __func__, clk_priv->prm_clk_cfg.clk_freq_in_hz,
+                        clk_priv->prm_clk_cfg.clk_id, clk_priv->clk_src);
+
 	platform_set_drvdata(pdev, clk_priv);
 
 	ret = of_property_read_string(pdev->dev.of_node, "pmic-clock-names",

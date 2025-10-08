@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/platform_device.h>
+#include <linux/bitops.h>
 #include <linux/clk.h>
 #include <linux/pm_runtime.h>
 #include <sound/soc.h>
@@ -84,8 +85,6 @@ static const struct snd_kcontrol_new name##_mux = \
 #define RX_MACRO_MOD_GAIN (RX_MACRO_GAIN_VAL_UNITY + 6)
 
 #define COMP_MAX_COEFF 25
-#define IIR_MIX_CFG_MAX 4
-#define IIR_MIX_CFG_OFFSET 10
 
 struct wcd_imped_val {
 	u32 imped_val;
@@ -446,7 +445,6 @@ struct rx_macro_priv {
 	struct device_node *rx_swr_gpio_p;
 	struct snd_soc_component *component;
 	unsigned long active_ch_mask[RX_MACRO_MAX_DAIS];
-	unsigned long active_ch_cnt[RX_MACRO_MAX_DAIS];
 	u16 bit_width[RX_MACRO_MAX_DAIS];
 	char __iomem *rx_io_base;
 	char __iomem *rx_mclk_mode_muxsel;
@@ -465,6 +463,7 @@ struct rx_macro_priv {
 	u16 default_clk_id;
 	int8_t rx0_gain_val;
 	int8_t rx1_gain_val;
+	u32 rx_macro_wsa_slv;
 };
 
 static struct snd_soc_dai_driver rx_macro_dai[];
@@ -485,7 +484,6 @@ static const char * const rx_sidetone_mix_text[] = {
 
 static const char * const iir_inp_mux_text[] = {
 	"ZERO", "DEC0", "DEC1", "DEC2", "DEC3",
-	"DUMMY_1", "DUMMY_2", "DUMMY_3", "DUMMY_4", "DUMMY_5",
 	"RX0", "RX1", "RX2", "RX3", "RX4", "RX5"
 };
 
@@ -925,9 +923,8 @@ static int rx_macro_set_prim_interpolator_rate(struct snd_soc_dai *dai,
 					    u32 sample_rate)
 {
 	u8 int_1_mix1_inp = 0;
-	u32 j = 0, k = 0, port = 0;
-	u16 int_mux_cfg0 = 0, int_mux_cfg1 = 0, iir_mux_cfg = 0;
-	u32 iir_mux_cfg_val = 0;
+	u32 j = 0, port = 0;
+	u16 int_mux_cfg0 = 0, int_mux_cfg1 = 0;
 	u16 int_fs_reg = 0;
 	u8 int_mux_cfg0_val = 0, int_mux_cfg1_val = 0;
 	u8 inp0_sel = 0, inp1_sel = 0, inp2_sel = 0;
@@ -978,58 +975,6 @@ static int rx_macro_set_prim_interpolator_rate(struct snd_soc_dai *dai,
 				snd_soc_component_update_bits(component,
 						int_fs_reg,
 						0x0F, rate_reg_val);
-			} else if ((inp0_sel == INTn_1_INP_SEL_IIR0) ||
-				  (inp1_sel == INTn_1_INP_SEL_IIR0) ||
-				  (inp2_sel == INTn_1_INP_SEL_IIR0)) {
-				for (k = 0; k < IIR_MIX_CFG_MAX; k++) {
-					iir_mux_cfg =
-					BOLERO_CDC_RX_IIR_INP_MUX_IIR0_MIX_CFG0
-					+ 4 * k;
-					iir_mux_cfg_val =
-					snd_soc_component_read(component,
-						iir_mux_cfg) & 0x1F;
-
-					if (iir_mux_cfg_val == int_1_mix1_inp
-					    + IIR_MIX_CFG_OFFSET){
-						int_fs_reg =
-						BOLERO_CDC_RX_RX0_RX_PATH_CTL +
-						0x80 * j;
-						pr_debug("%s: AIF_PB DAI(%d) connected to INT%u_1 via IIR0\n",
-							 __func__, dai->id, j);
-						pr_debug("%s: set INT%u_1 sample rate to %u\n",
-							 __func__, j, sample_rate);
-						/* sample_rate is in Hz */
-						snd_soc_component_update_bits(component,
-							int_fs_reg,
-							0x0F, rate_reg_val);
-					}
-				}
-			} else if ((inp0_sel == INTn_1_INP_SEL_IIR1) ||
-				  (inp1_sel == INTn_1_INP_SEL_IIR1) ||
-				   (inp2_sel == INTn_1_INP_SEL_IIR1)) {
-				for (k = 0; k < IIR_MIX_CFG_MAX; k++) {
-					iir_mux_cfg =
-					BOLERO_CDC_RX_IIR_INP_MUX_IIR1_MIX_CFG0
-					+ 4 * k;
-					iir_mux_cfg_val =
-					snd_soc_component_read(
-					component, iir_mux_cfg) & 0x1F;
-
-					if (iir_mux_cfg_val == int_1_mix1_inp
-					    + IIR_MIX_CFG_OFFSET){
-						int_fs_reg =
-						BOLERO_CDC_RX_RX0_RX_PATH_CTL +
-						0x80 * j;
-						pr_debug("%s: AIF_PB DAI(%d) connected to INT%u_1 via IIR1\n",
-							 __func__, dai->id, j);
-						pr_debug("%s: set INT%u_1 sample rate to %u\n",
-							 __func__, j, sample_rate);
-						/* sample_rate is in Hz */
-						snd_soc_component_update_bits(
-							component, int_fs_reg,
-							0x0F, rate_reg_val);
-			    		}
-				}
 			}
 			int_mux_cfg0 += 8;
 		}
@@ -1213,7 +1158,7 @@ static int rx_macro_get_channel_map(struct snd_soc_dai *dai,
 		if ((ch_mask & 0x10) || (ch_mask & 0x20))
 			ch_mask = 0x1;
 		*rx_slot = ch_mask;
-		*rx_num = rx_priv->active_ch_cnt[dai->id];
+		*rx_num = hweight_long(ch_mask);
 		dev_dbg(rx_priv->dev,
 			"%s: dai->id:%d, ch_mask:0x%x, active_ch_cnt:%d active_mask: 0x%x\n",
 			__func__, dai->id, *rx_slot, *rx_num, rx_priv->active_ch_mask[dai->id]);
@@ -1306,7 +1251,11 @@ static int rx_macro_mute_stream(struct snd_soc_dai *dai, int mute, int stream)
 			}
 		}
 	}
-		break;
+
+	if (rx_priv->rx_macro_wsa_slv)
+		bolero_rx_pa_on(rx_dev);
+	break;
+
 	default:
 		break;
 	}
@@ -1397,8 +1346,6 @@ static int rx_macro_mclk_enable(struct rx_macro_priv *rx_priv,
 		}
 	}
 exit:
-	trace_printk("%s: mclk_enable = %u, dapm = %d clk_users= %d\n",
-		__func__, mclk_enable, dapm, rx_priv->rx_mclk_users);
 	mutex_unlock(&rx_priv->mclk_lock);
 	return ret;
 }
@@ -1484,7 +1431,6 @@ static int rx_macro_event_handler(struct snd_soc_component *component,
 		rx_macro_wcd_clsh_imped_config(component, data, false);
 		break;
 	case BOLERO_MACRO_EVT_SSR_DOWN:
-		trace_printk("%s, enter SSR down\n", __func__);
 		rx_priv->dev_up = false;
 		if (rx_priv->swr_ctrl_data) {
 			swrm_wcd_notify(
@@ -1519,7 +1465,6 @@ static int rx_macro_event_handler(struct snd_soc_component *component,
 		rx_macro_core_vote(rx_priv, false);
 		break;
 	case BOLERO_MACRO_EVT_SSR_UP:
-		trace_printk("%s, enter SSR up\n", __func__);
 		rx_priv->dev_up = true;
 		/* reset swr after ssr/pdr */
 		rx_priv->reset_swr = true;
@@ -2263,11 +2208,7 @@ static int rx_macro_mux_put(struct snd_kcontrol *kcontrol,
 
 	switch (rx_port_value) {
 	case 0:
-		if (rx_priv->active_ch_cnt[aif_rst]) {
-			clear_bit(widget->shift,
-				&rx_priv->active_ch_mask[aif_rst]);
-			rx_priv->active_ch_cnt[aif_rst]--;
-		}
+		clear_bit(widget->shift, &rx_priv->active_ch_mask[aif_rst]);
 		break;
 	case 1:
 	case 2:
@@ -2275,7 +2216,6 @@ static int rx_macro_mux_put(struct snd_kcontrol *kcontrol,
 	case 4:
 		set_bit(widget->shift,
 			&rx_priv->active_ch_mask[rx_port_value]);
-		rx_priv->active_ch_cnt[rx_port_value]++;
 		break;
 	default:
 		dev_err(component->dev,
@@ -3828,8 +3768,6 @@ static int rx_swrm_clock(void *handle, bool enable)
 
 	mutex_lock(&rx_priv->swr_clk_lock);
 
-	trace_printk("%s: swrm clock %s\n",
-			__func__, (enable ? "enable" : "disable"));
 	dev_dbg(rx_priv->dev, "%s: swrm clock %s\n",
 		__func__, (enable ? "enable" : "disable"));
 	if (enable) {
@@ -3896,8 +3834,6 @@ static int rx_swrm_clock(void *handle, bool enable)
 			}
 		}
 	}
-	trace_printk("%s: swrm clock users %d\n",
-		__func__, rx_priv->swr_clk_users);
 	dev_dbg(rx_priv->dev, "%s: swrm clock users %d\n",
 		__func__, rx_priv->swr_clk_users);
 exit:
@@ -4174,7 +4110,7 @@ static int rx_macro_probe(struct platform_device *pdev)
 	struct rx_macro_priv *rx_priv = NULL;
 	u32 rx_base_addr = 0, muxsel = 0;
 	char __iomem *rx_io_base = NULL, *muxsel_io = NULL;
-	int ret = 0;
+	int ret = 0, val = 0;
 	u8 bcl_pmic_params[3];
 	u32 default_clk_id = 0;
 	u32 is_used_rx_swr_gpio = 1;
@@ -4206,6 +4142,14 @@ static int rx_macro_probe(struct platform_device *pdev)
 			__func__, "reg");
 		return ret;
 	}
+
+	ret = of_property_read_u32(pdev->dev.of_node, "qcom,rx-wsa-enable", &val);
+	if (ret == 0) {
+		rx_priv->rx_macro_wsa_slv = (val == 1) ? 1 : 0;
+		dev_info(&pdev->dev, "RX macro wsa slave is %s\n",
+			(val == 1) ? "connected" : "not connected");
+	}
+
 	ret = of_property_read_u32(pdev->dev.of_node, "qcom,default-clk-id",
 				   &default_clk_id);
 	if (ret) {
@@ -4300,7 +4244,6 @@ static int rx_macro_probe(struct platform_device *pdev)
 	pm_suspend_ignore_children(&pdev->dev, true);
 	pm_runtime_enable(&pdev->dev);
 	schedule_work(&rx_priv->rx_macro_add_child_devices_work);
-
 	return 0;
 
 err_reg_macro:

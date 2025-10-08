@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of_platform.h>
@@ -21,6 +21,7 @@
 #include "internal.h"
 #include "bolero-clk-rsc.h"
 #include "asoc/bolero-slave-internal.h"
+#include <linux/qti-regmap-debugfs.h>
 
 #define DRV_NAME "bolero_codec"
 
@@ -236,8 +237,9 @@ static int bolero_cdc_update_wcd_event(void *handle, u16 event, u32 data)
 				BOLERO_MACRO_EVT_BCS_CLK_OFF, data);
 		break;
 	case SLV_BOLERO_EVT_RX_PA_GAIN_UPDATE:
-		/* Update PA Gain only for bolero version 2.1 */
-		if (priv->version == BOLERO_VERSION_2_1)
+		/* Update PA Gain for bolero version 2.1 and 2.2*/
+		if ((priv->version == BOLERO_VERSION_2_1) ||
+		    (priv->version == BOLERO_VERSION_2_2))
 			if (priv->macro_params[RX_MACRO].event_handler)
 				priv->macro_params[RX_MACRO].event_handler(
 					priv->component,
@@ -698,12 +700,12 @@ int bolero_register_macro(struct device *dev, u16 macro_id,
 	if (macro_id == TX_MACRO || macro_id == VA_MACRO)
 		priv->macro_params[macro_id].clk_div_get = ops->clk_div_get;
 
-	if (priv->version == BOLERO_VERSION_2_1) {
+	if ((priv->version == BOLERO_VERSION_2_1) ||
+	    (priv->version == BOLERO_VERSION_2_2)) {
 		if (macro_id == VA_MACRO)
 			priv->macro_params[macro_id].reg_wake_irq =
 						ops->reg_wake_irq;
 	}
-	mutex_lock(&priv->macro_lock);
 	priv->num_dais += ops->num_dais;
 	priv->num_macros_registered++;
 	priv->macros_supported[macro_id] = true;
@@ -714,7 +716,6 @@ int bolero_register_macro(struct device *dev, u16 macro_id,
 		ret = bolero_copy_dais_from_macro(priv);
 		if (ret < 0) {
 			dev_err(dev, "%s: copy_dais failed\n", __func__);
-			mutex_unlock(&priv->macro_lock);
 			return ret;
 		}
 		if (priv->macros_supported[TX_MACRO] == false) {
@@ -727,11 +728,9 @@ int bolero_register_macro(struct device *dev, u16 macro_id,
 				priv->bolero_dais, priv->num_dais);
 		if (ret < 0) {
 			dev_err(dev, "%s: register codec failed\n", __func__);
-			mutex_unlock(&priv->macro_lock);
 			return ret;
 		}
 	}
-	mutex_unlock(&priv->macro_lock);
 	return 0;
 }
 EXPORT_SYMBOL(bolero_register_macro);
@@ -784,6 +783,34 @@ void bolero_unregister_macro(struct device *dev, u16 macro_id)
 		snd_soc_unregister_component(dev->parent);
 }
 EXPORT_SYMBOL(bolero_unregister_macro);
+
+/**
+ * bolero_rx_pa_on - Send PA on event from RX macro to slave.
+ *
+ * @dev: macro device ptr.
+ */
+void bolero_rx_pa_on(struct device *dev)
+{
+	struct bolero_priv *priv;
+
+	if (!dev) {
+		pr_err("%s: dev is null\n", __func__);
+		return;
+	}
+	if (!bolero_is_valid_child_dev(dev)) {
+		dev_err(dev, "%s: not a valid child dev\n",
+			__func__);
+		return;
+	}
+	priv = dev_get_drvdata(dev->parent);
+	if (!priv) {
+		dev_err(dev, "%s: priv is null\n", __func__);
+		return;
+	}
+
+	bolero_cdc_notifier_call(priv, BOLERO_SLV_EVT_RX_MACRO_PA_ON);
+}
+EXPORT_SYMBOL_GPL(bolero_rx_pa_on);
 
 void bolero_wsa_pa_on(struct device *dev, bool adie_lb)
 {
@@ -892,7 +919,6 @@ static int bolero_ssr_enable(struct device *dev, void *data)
 				priv->component,
 				BOLERO_MACRO_EVT_CLK_RESET, 0x0);
 	}
-	trace_printk("%s: clk count reset\n", __func__);
 
 	if (priv->rsc_clk_cb)
 		priv->rsc_clk_cb(priv->clk_dev, BOLERO_MACRO_EVT_SSR_GFMUX_UP);
@@ -915,7 +941,6 @@ static int bolero_ssr_enable(struct device *dev, void *data)
 	/* Add a 100usec sleep to ensure last register write is done */
 	usleep_range(100,110);
 	bolero_clk_rsc_enable_all_clocks(priv->clk_dev, false);
-	trace_printk("%s: regcache_sync done\n", __func__);
 	/* call ssr event for supported macros */
 	for (macro_idx = START_MACRO; macro_idx < MAX_MACRO; macro_idx++) {
 		if (!priv->macro_params[macro_idx].event_handler)
@@ -924,7 +949,6 @@ static int bolero_ssr_enable(struct device *dev, void *data)
 			priv->component,
 			BOLERO_MACRO_EVT_SSR_UP, 0x0);
 	}
-	trace_printk("%s: SSR up events processed by all macros\n", __func__);
 	bolero_cdc_notifier_call(priv, BOLERO_SLV_EVT_SSR_UP);
 	return 0;
 }
@@ -1059,7 +1083,8 @@ int bolero_register_wake_irq(struct snd_soc_component *component,
 		return -EINVAL;
 	}
 
-	if (priv->version == BOLERO_VERSION_2_1) {
+	if ((priv->version == BOLERO_VERSION_2_1) ||
+	    (priv->version == BOLERO_VERSION_2_2)) {
 		if (priv->macro_params[VA_MACRO].reg_wake_irq)
 			priv->macro_params[VA_MACRO].reg_wake_irq(
 					component, ipc_wakeup);
@@ -1180,7 +1205,7 @@ static int bolero_soc_codec_probe(struct snd_soc_component *component)
 {
 	struct bolero_priv *priv = dev_get_drvdata(component->dev);
 	int macro_idx, ret = 0;
-	u8 core_id_0 = 0, core_id_1 = 0;
+	u8 core_id_0 = 0, core_id_1 = 0, core_id_2 = 0;
 
 	snd_soc_component_init_regmap(component, priv->regmap);
 
@@ -1205,10 +1230,16 @@ static int bolero_soc_codec_probe(struct snd_soc_component *component)
 					BOLERO_CDC_VA_TOP_CSR_CORE_ID_0);
 	core_id_1 = snd_soc_component_read(component,
 					BOLERO_CDC_VA_TOP_CSR_CORE_ID_1);
+	core_id_2 = snd_soc_component_read(component,
+					BOLERO_CDC_VA_TOP_CSR_CORE_ID_2);
 	if ((core_id_0 == 0x01) && (core_id_1 == 0x0F))
 		priv->version = BOLERO_VERSION_2_0;
-	if ((core_id_0 == 0x02) && (core_id_1 == 0x0E))
-		priv->version = BOLERO_VERSION_2_1;
+	if ((core_id_0 == 0x02) && (core_id_1 == 0x0E)) {
+		if (core_id_2 == 0x20)
+			priv->version = BOLERO_VERSION_2_2;
+		else
+			priv->version = BOLERO_VERSION_2_1;
+	}
 
 	/* call init for supported macros */
 	for (macro_idx = START_MACRO; macro_idx < MAX_MACRO; macro_idx++) {
@@ -1372,7 +1403,8 @@ static int bolero_probe(struct platform_device *pdev)
 			__func__);
 		ret = 0;
 	}
-	if (priv->version == BOLERO_VERSION_2_1) {
+	if ((priv->version == BOLERO_VERSION_2_1) ||
+	    (priv->version == BOLERO_VERSION_2_2)) {
 		bolero_reg_access[TX_MACRO] = bolero_tx_reg_access_v2;
 		bolero_reg_access[VA_MACRO] = bolero_va_reg_access_v2;
 	} else if (priv->version == BOLERO_VERSION_2_0) {
@@ -1389,6 +1421,9 @@ static int bolero_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "%s:regmap init failed\n", __func__);
 		return -EINVAL;
 	}
+
+	devm_regmap_qti_debugfs_register(priv->dev, priv->regmap);
+
 	priv->read_dev = __bolero_reg_read;
 	priv->write_dev = __bolero_reg_write;
 
@@ -1400,7 +1435,6 @@ static int bolero_probe(struct platform_device *pdev)
 	priv->core_audio_vote_count = 0;
 
 	dev_set_drvdata(&pdev->dev, priv);
-	mutex_init(&priv->macro_lock);
 	mutex_init(&priv->io_lock);
 	mutex_init(&priv->clk_lock);
 	mutex_init(&priv->vote_lock);
@@ -1425,10 +1459,9 @@ static int bolero_probe(struct platform_device *pdev)
 		dev_dbg(&pdev->dev, "%s: clk get %s failed %d\n",
 			__func__, "lpass_audio_hw_vote", ret);
 		lpass_audio_hw_vote = NULL;
-		return -EPROBE_DEFER;
+		ret = 0;
 	}
 	priv->lpass_audio_hw_vote = lpass_audio_hw_vote;
-
 	schedule_work(&priv->bolero_add_child_devices_work);
 	return 0;
 }
@@ -1441,7 +1474,6 @@ static int bolero_remove(struct platform_device *pdev)
 		return -EINVAL;
 
 	of_platform_depopulate(&pdev->dev);
-	mutex_destroy(&priv->macro_lock);
 	mutex_destroy(&priv->io_lock);
 	mutex_destroy(&priv->clk_lock);
 	mutex_destroy(&priv->vote_lock);
@@ -1462,7 +1494,7 @@ int bolero_runtime_resume(struct device *dev)
 	}
 
 	if (priv->core_hw_vote_count == 0) {
-		ret = digital_cdc_rsc_mgr_hw_vote_enable(priv->lpass_core_hw_vote);
+		ret = digital_cdc_rsc_mgr_hw_vote_enable(priv->lpass_core_hw_vote, dev);
 		if (ret < 0) {
 			dev_err(dev, "%s:lpass core hw enable failed\n",
 				__func__);
@@ -1470,8 +1502,6 @@ int bolero_runtime_resume(struct device *dev)
 		}
 	}
 	priv->core_hw_vote_count++;
-	trace_printk("%s: hw vote count %d\n",
-		__func__, priv->core_hw_vote_count);
 
 audio_vote:
 	if (priv->lpass_audio_hw_vote == NULL) {
@@ -1480,7 +1510,7 @@ audio_vote:
 	}
 
 	if (priv->core_audio_vote_count == 0) {
-		ret = digital_cdc_rsc_mgr_hw_vote_enable(priv->lpass_audio_hw_vote);
+		ret = digital_cdc_rsc_mgr_hw_vote_enable(priv->lpass_audio_hw_vote, dev);
 		if (ret < 0) {
 			if (__ratelimit(&rtl))
 				dev_err(dev, "%s:lpass audio hw enable failed\n",
@@ -1489,8 +1519,6 @@ audio_vote:
 		}
 	}
 	priv->core_audio_vote_count++;
-	trace_printk("%s: audio vote count %d\n",
-		__func__, priv->core_audio_vote_count);
 
 done:
 	mutex_unlock(&priv->vote_lock);
@@ -1507,28 +1535,24 @@ int bolero_runtime_suspend(struct device *dev)
 	if (priv->lpass_core_hw_vote != NULL) {
 		if (--priv->core_hw_vote_count == 0)
 			digital_cdc_rsc_mgr_hw_vote_disable(
-					priv->lpass_core_hw_vote);
+					priv->lpass_core_hw_vote, dev);
 		if (priv->core_hw_vote_count < 0)
 			priv->core_hw_vote_count = 0;
 	} else {
 		dev_dbg(dev, "%s: Invalid lpass core hw node\n",
 			__func__);
 	}
-	trace_printk("%s: hw vote count %d\n",
-		__func__, priv->core_hw_vote_count);
 
 	if (priv->lpass_audio_hw_vote != NULL) {
 		if (--priv->core_audio_vote_count == 0)
 			digital_cdc_rsc_mgr_hw_vote_disable(
-					priv->lpass_audio_hw_vote);
+					priv->lpass_audio_hw_vote, dev);
 		if (priv->core_audio_vote_count < 0)
 			priv->core_audio_vote_count = 0;
 	} else {
 		dev_dbg(dev, "%s: Invalid lpass audio hw node\n",
 			__func__);
 	}
-	trace_printk("%s: audio vote count %d\n",
-		__func__, priv->core_audio_vote_count);
 
 	mutex_unlock(&priv->vote_lock);
 	return 0;
