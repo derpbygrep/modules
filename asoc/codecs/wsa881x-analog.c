@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2015-2016, 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2015-2016, 2018-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -22,12 +22,10 @@
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
 #include <sound/tlv.h>
-#include <dsp/q6afe-v2.h>
 #include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/kernel.h>
 #include <linux/gpio.h>
-#include <internal.h>
 #include <linux/regmap.h>
 #include <asoc/msm-cdc-pinctrl.h>
 #include "wsa881x-analog.h"
@@ -923,7 +921,7 @@ static void wsa881x_ocp_ctl_work(struct work_struct *work)
 	struct wsa881x_pdata *wsa881x;
 	struct delayed_work *dwork;
 	struct snd_soc_component *component;
-	int temp_val = 0;
+	int temp_val;
 
 	dwork = to_delayed_work(work);
 	wsa881x = container_of(dwork, struct wsa881x_pdata, ocp_ctl_work);
@@ -1235,12 +1233,12 @@ static const struct snd_soc_component_driver soc_codec_dev_wsa881x = {
 
 static struct snd_soc_dai_driver wsa_dai[] = {
 	{
-		.name = "",
+		.name = "wsa_rx0",
 		.playback = {
 			.stream_name = "",
 			.rates = WSA881X_RATES | WSA881X_FRAC_RATES,
 			.formats = WSA881X_FORMATS,
-			.rate_max = 192000,
+			.rate_max = 384000,
 			.rate_min = 8000,
 			.channels_min = 1,
 			.channels_max = 2,
@@ -1586,7 +1584,7 @@ err:
 	return ret;
 }
 
-static int wsa881x_i2c_remove(struct i2c_client *client)
+static void wsa881x_i2c_remove(struct i2c_client *client)
 {
 	struct wsa881x_pdata *wsa881x = client->dev.platform_data;
 
@@ -1603,7 +1601,6 @@ static int wsa881x_i2c_remove(struct i2c_client *client)
 	}
 	i2c_set_clientdata(client, NULL);
 	kfree(wsa881x);
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+/*
  * Core private header for the pin control subsystem
  *
  * Copyright (C) 2011 ST-Ericsson SA
@@ -101,8 +101,8 @@ struct pinctrl_state {
  * @func: the function selector to program
  */
 struct pinctrl_setting_mux {
-	unsigned int group;
-	unsigned int func;
+	unsigned group;
+	unsigned func;
 };
 
 /**
@@ -114,9 +114,9 @@ struct pinctrl_setting_mux {
  * @num_configs: the number of entries in array @configs
  */
 struct pinctrl_setting_configs {
-	unsigned int group_or_pin;
+	unsigned group_or_pin;
 	unsigned long *configs;
-	unsigned int num_configs;
+	unsigned num_configs;
 };
 
 /**
@@ -163,7 +163,7 @@ struct pin_desc {
 	void *drv_data;
 	/* These fields only added when supporting pinmux drivers */
 #ifdef CONFIG_PINMUX
-	unsigned int mux_usecount;
+	unsigned mux_usecount;
 	const char *mux_owner;
 	const struct pinctrl_setting_mux *mux_setting;
 	const char *gpio_owner;
@@ -179,7 +179,7 @@ struct pin_desc {
 struct pinctrl_maps {
 	struct list_head node;
 	const struct pinctrl_map *maps;
-	unsigned int num_maps;
+	unsigned num_maps;
 };
 
 #ifdef CONFIG_GENERIC_PINCTRL_GROUPS
@@ -222,7 +222,7 @@ int pinctrl_generic_remove_group(struct pinctrl_dev *pctldev,
 struct pinctrl_dev *get_pinctrl_dev_from_devname(const char *dev_name);
 struct pinctrl_dev *get_pinctrl_dev_from_of_node(struct device_node *np);
 int pin_get_from_name(struct pinctrl_dev *pctldev, const char *name);
-const char *pin_get_name(struct pinctrl_dev *pctldev, const unsigned int pin);
+const char *pin_get_name(struct pinctrl_dev *pctldev, const unsigned pin);
 int pinctrl_get_group_selector(struct pinctrl_dev *pctldev,
 			       const char *pin_group);
 
@@ -235,10 +235,6 @@ static inline struct pin_desc *pin_desc_get(struct pinctrl_dev *pctldev,
 extern struct pinctrl_gpio_range *
 pinctrl_find_gpio_range_from_pin_nolock(struct pinctrl_dev *pctldev,
 					unsigned int pin);
-
-int pinctrl_register_map(const struct pinctrl_map *maps, unsigned int num_maps,
-			 bool dup);
-void pinctrl_unregister_map(const struct pinctrl_map *map);
 
 extern int pinctrl_force_sleep(struct pinctrl_dev *pctldev);
 extern int pinctrl_force_default(struct pinctrl_dev *pctldev);

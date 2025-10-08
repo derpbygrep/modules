@@ -9,18 +9,8 @@ endif
 ifeq ($(KERNEL_BUILD), 1)
 	# These are configurable via Kconfig for kernel-based builds
 	# Need to explicitly configure for Android-based builds
-	ifeq  ($(TARGET_SUPPORT), sa410m)
-		AUDIO_ROOT := $(shell pwd)/../../../../vendor/qcom/opensource/audio-kernel
-	else
-		AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-5.4
-		AUDIO_ROOT := $(AUDIO_BLD_DIR)/techpack/audio
-	endif
-endif
-
-ifeq ($(TARGET_SUPPORT), sa410m)
-	include $(AUDIO_ROOT)/config/sa410mauto.conf
-	export
-	INCS    +=  -include $(AUDIO_ROOT)/config/sa410mautoconf.h
+	AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-5.4
+	AUDIO_ROOT := $(AUDIO_BLD_DIR)/techpack/audio
 endif
 
 ifeq ($(CONFIG_SND_SOC_AUTO), y)
@@ -36,67 +26,96 @@ ifeq ($(CONFIG_SND_SOC_AUTO), y)
 		include $(AUDIO_ROOT)/config/gvmauto.conf
 		INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
 	endif
-	ifdef CONFIG_SND_SOC_GVM_SA8295
-		include $(AUDIO_ROOT)/config/sa8295gvmauto.conf
-		INCS    +=  -include $(AUDIO_ROOT)/config/sa8295gvmautoconf.h
+	ifdef CONFIG_SND_SOC_SA7255
+		include $(AUDIO_ROOT)/config/sa7255auto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/sa7255autoconf.h
 	endif
 else
-	ifeq ($(KERNEL_BUILD), 0)
-		ifeq ($(CONFIG_ARCH_SM6150), y)
-			ifdef CONFIG_SND_SOC_SA6155
-				include $(AUDIO_ROOT)/config/sa6155auto.conf
-				INCS    +=  -include $(AUDIO_ROOT)/config/sa6155autoconf.h
-			else
-				include $(AUDIO_ROOT)/config/sm6150auto.conf
-				INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
-			endif
-		endif
-		ifeq ($(CONFIG_ARCH_TRINKET), y)
+ifeq ($(KERNEL_BUILD), 0)
+	ifeq ($(CONFIG_ARCH_SM6150), y)
+		ifdef CONFIG_SND_SOC_SA6155
+			include $(AUDIO_ROOT)/config/sa6155auto.conf
+			INCS    +=  -include $(AUDIO_ROOT)/config/sa6155autoconf.h
+		else
 			include $(AUDIO_ROOT)/config/sm6150auto.conf
 			INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
 		endif
-		ifeq ($(CONFIG_ARCH_KONA), y)
-			include $(AUDIO_ROOT)/config/konaauto.conf
-			INCS    +=  -include $(AUDIO_ROOT)/config/konaautoconf.h
-		endif
-		ifeq ($(CONFIG_ARCH_LITO), y)
-			include $(AUDIO_ROOT)/config/litoauto.conf
-			export
-			INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
-		endif
-		ifeq ($(CONFIG_ARCH_BENGAL), y)
-			include $(AUDIO_ROOT)/config/bengalauto.conf
-			export
-			INCS    +=  -include $(AUDIO_ROOT)/config/bengalautoconf.h
-		endif
-		ifeq ($(CONFIG_ARCH_SM8150), y)
-			ifdef CONFIG_SND_SOC_SA8155
-				include $(AUDIO_ROOT)/config/sa8155auto.conf
-				INCS    +=  -include $(AUDIO_ROOT)/config/sa8155autoconf.h
-			else
-				include $(AUDIO_ROOT)/config/sm8150auto.conf
-				INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
-			endif
-		endif
-		ifeq ($(CONFIG_ARCH_SDMSHRIKE), y)
-			ifdef CONFIG_SND_SOC_SA8155
-				include $(AUDIO_ROOT)/config/sa8155auto.conf
-				INCS    +=  -include $(AUDIO_ROOT)/config/sa8155autoconf.h
-			else
-				include $(AUDIO_ROOT)/config/sm8150auto.conf
-				INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
-			endif
-		endif
-		ifeq ($(CONFIG_ARCH_QCS405), y)
-			include $(AUDIO_ROOT)/config/qcs405auto.conf
-			export
-			INCS    +=  -include $(AUDIO_ROOT)/config/qcs405autoconf.h
-		endif
-		ifeq ($(CONFIG_QTI_QUIN_GVM), y)
-			include $(AUDIO_ROOT)/config/gvmauto.conf
-			INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_TRINKET), y)
+		include $(AUDIO_ROOT)/config/sm6150auto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_KONA), y)
+		include $(AUDIO_ROOT)/config/konaauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/konaautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_WAIPIO), y)
+		include $(AUDIO_ROOT)/config/waipioauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/waipioautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_KALAMA), y)
+		include $(AUDIO_ROOT)/config/kalamaauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/kalamaautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_PINEAPPLE), y)
+		include $(AUDIO_ROOT)/config/pineappleauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/pineappleautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_PITTI), y)
+		include $(AUDIO_ROOT)/config/pittiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/pittiautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_LITO), y)
+		include $(AUDIO_ROOT)/config/litoauto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_KHAJE), y)
+		include $(AUDIO_ROOT)/config/bengalauto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/bengalautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_HOLI), y)
+		include $(AUDIO_ROOT)/config/holiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/holiautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_BLAIR), y)
+		include $(AUDIO_ROOT)/config/holiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/holiautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_SM8150), y)
+		ifdef CONFIG_SND_SOC_SA8155
+			include $(AUDIO_ROOT)/config/sa8155auto.conf
+			INCS    +=  -include $(AUDIO_ROOT)/config/sa8155autoconf.h
+		else
+			include $(AUDIO_ROOT)/config/sm8150auto.conf
+			INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
 		endif
 	endif
+	ifeq ($(CONFIG_ARCH_SDMSHRIKE), y)
+		ifdef CONFIG_SND_SOC_SA8155
+			include $(AUDIO_ROOT)/config/sa8155auto.conf
+			INCS    +=  -include $(AUDIO_ROOT)/config/sa8155autoconf.h
+		else
+			include $(AUDIO_ROOT)/config/sm8150auto.conf
+			INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
+		endif
+	endif
+	ifeq ($(CONFIG_ARCH_QCS405), y)
+		include $(AUDIO_ROOT)/config/qcs405auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/qcs405autoconf.h
+	endif
+	ifeq ($(CONFIG_QTI_QUIN_GVM), y)
+		include $(AUDIO_ROOT)/config/gvmauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_SDXLEMUR), y)
+		include $(AUDIO_ROOT)/config/sdxlemurauto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/sdxlemurautoconf.h
+	endif
+endif
 endif
 
 # As per target team, build is done as follows:
@@ -116,7 +135,7 @@ endif
 # config.
 
 ############ UAPI ############
-UAPI_DIR :=	uapi/
+UAPI_DIR :=	uapi/audio/
 UAPI_INC :=	-I$(AUDIO_ROOT)/include/$(UAPI_DIR)
 
 ############ COMMON ############
@@ -127,36 +146,11 @@ COMMON_INC :=	-I$(AUDIO_ROOT)/$(COMMON_DIR)
 
 ifdef CONFIG_SND_SOC_MSM_QDSP6V2_INTF
 	Q6_OBJS += msm-audio-event-notify.o
-	Q6_OBJS += audio_calibration.o
-	Q6_OBJS += audio_cal_utils.o
-	Q6_OBJS += q6adm.o
-	Q6_OBJS += q6afe.o
-	Q6_OBJS += q6asm.o
-	Q6_OBJS += q6audio-v2.o
-	Q6_OBJS += q6voice.o
-	Q6_OBJS += q6core.o
-	Q6_OBJS += q6common.o
-	Q6_OBJS += rtac.o
-	Q6_OBJS += q6lsm.o
-	Q6_OBJS += adsp_err.o
-	Q6_OBJS += msm_audio_ion.o
 	Q6_OBJS += q6_init.o
 endif
 
 ifdef CONFIG_SND_SOC_MSM_QDSP6V2_VM
 	Q6_OBJS += msm-audio-event-notify.o
-	Q6_OBJS += audio_calibration.o
-	Q6_OBJS += audio_cal_utils.o
-	Q6_OBJS += q6adm.o
-	Q6_OBJS += q6afe.o
-	Q6_OBJS += q6asm.o
-	Q6_OBJS += q6audio-v2.o
-	Q6_OBJS += q6voice.o
-	Q6_OBJS += q6core.o
-	Q6_OBJS += q6common.o
-	Q6_OBJS += rtac.o
-	Q6_OBJS += q6lsm.o
-	Q6_OBJS += adsp_err.o
 	Q6_OBJS += msm_audio_ion_vm.o
 	Q6_OBJS += q6_init.o
 endif
@@ -167,18 +161,6 @@ endif
 
 ifdef CONFIG_XT_LOGGING
 	Q6_OBJS += sp_params.o
-endif
-
-ifdef CONFIG_WCD9XXX_CODEC_CORE
-	Q6_OBJS += audio_slimslave.o
-endif
-
-ifdef CONFIG_DTS_SRS_TM
-	Q6_OBJS += msm-dts-srs-tm-config.o
-endif
-
-ifdef CONFIG_AFE_HWDEP
-	Q6_OBJS += q6afecal-hwdep.o
 endif
 
 ifdef CONFIG_MSM_ADSP_LOADER
@@ -193,21 +175,26 @@ ifdef CONFIG_MSM_QDSP6_NOTIFIER
 QDSP6_NOTIFIER_OBJS += audio_notifier.o audio_ssr.o
 endif
 
-ifdef CONFIG_MSM_ULTRASOUND
-USF_OBJS += usf.o usfcdev.o q6usm.o
+ifdef CONFIG_SPF_CORE
+SPF_CORE_OBJS += spf-core.o
 endif
 
-ifdef CONFIG_MSM_MDF
-	Q6_OBJS += msm_mdf.o
+ifdef CONFIG_AUDIO_PRM
+AUDIO_PRM += audio_prm.o
+endif
+
+ifdef CONFIG_AUDIO_PKT_ION
+AUDIO_PKT_ION += msm_audio_ion.o
 endif
 
 ifdef CONFIG_VOICE_MHI
-	Q6_OBJS += voice_mhi.o
+VOICE_MHI += voice_mhi.o
 endif
 
 ifdef CONFIG_DIGITAL_CDC_RSC_MGR
-	Q6_OBJS += digital-cdc-rsc-mgr.o
+	SPF_CORE_OBJS += digital-cdc-rsc-mgr.o
 endif
+
 
 LINUX_INC +=	-Iinclude/linux
 
@@ -215,7 +202,7 @@ INCS +=		$(COMMON_INC) \
 		$(UAPI_INC)
 
 EXTRA_CFLAGS += $(INCS)
-EXTRA_CFLAGS += $(KERNEL_SRC)/drivers/pinctrl/
+
 
 CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DANI_LITTLE_BIT_ENDIAN \
@@ -253,11 +240,6 @@ CHIP_NAME ?= $(MODNAME)
 CDEFINES += -DMULTI_IF_NAME=\"$(CHIP_NAME)\"
 endif
 
-ifeq ($(KERNEL_BUILD), 0)
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/ipc/Module.symvers
-endif
-
-obj-y += codecs/
 
 obj-$(CONFIG_SND_SOC_MSM_QDSP6V2_INTF) += q6_dlkm.o
 q6_dlkm-y := $(Q6_OBJS)
@@ -265,17 +247,26 @@ q6_dlkm-y := $(Q6_OBJS)
 obj-$(CONFIG_SND_SOC_MSM_QDSP6V2_VM) += q6_dlkm.o
 q6_dlkm-y := $(Q6_OBJS)
 
-obj-$(CONFIG_MSM_ULTRASOUND) += usf_dlkm.o
-usf_dlkm-y := $(USF_OBJS)
-
 obj-$(CONFIG_MSM_ADSP_LOADER) += adsp_loader_dlkm.o
 adsp_loader_dlkm-y := $(ADSP_LOADER_OBJS)
 
 obj-$(CONFIG_MSM_QDSP6_PDR) += q6_pdr_dlkm.o
 q6_pdr_dlkm-y := $(QDSP6_PDR_OBJS)
 
+obj-$(CONFIG_SPF_CORE) += spf_core_dlkm.o
+spf_core_dlkm-y := $(SPF_CORE_OBJS)
+
 obj-$(CONFIG_MSM_QDSP6_NOTIFIER) += q6_notifier_dlkm.o
 q6_notifier_dlkm-y := $(QDSP6_NOTIFIER_OBJS)
+
+obj-$(CONFIG_AUDIO_PRM) += audio_prm_dlkm.o
+audio_prm_dlkm-y := $(AUDIO_PRM)
+
+obj-$(CONFIG_AUDIO_PKT_ION) += audpkt_ion_dlkm.o
+audpkt_ion_dlkm-y := $(AUDIO_PKT_ION)
+
+obj-$(CONFIG_VOICE_MHI) += voice_mhi_dlkm.o
+voice_mhi_dlkm-y := $(VOICE_MHI)
 
 # inject some build related information
 DEFINES += -DBUILD_TIMESTAMP=\"$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')\"

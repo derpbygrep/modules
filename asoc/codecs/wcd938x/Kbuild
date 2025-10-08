@@ -23,7 +23,26 @@ ifeq ($(KERNEL_BUILD), 0)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
 	endif
-
+	ifeq ($(CONFIG_ARCH_WAIPIO), y)
+		include $(AUDIO_ROOT)/config/waipioauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/waipioautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_KALAMA), y)
+		include $(AUDIO_ROOT)/config/kalamaauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/kalamaautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_PINEAPPLE), y)
+		include $(AUDIO_ROOT)/config/pineappleauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/pineappleautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_HOLI), y)
+		include $(AUDIO_ROOT)/config/holiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/holiautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_BLAIR), y)
+		include $(AUDIO_ROOT)/config/holiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/holiautoconf.h
+	endif
 endif
 
 # As per target team, build is done as follows:
@@ -43,7 +62,7 @@ endif
 # config.
 
 ############ UAPI ############
-UAPI_DIR :=	uapi
+UAPI_DIR :=	uapi/audio
 UAPI_INC :=	-I$(AUDIO_ROOT)/include/$(UAPI_DIR)
 
 ############ COMMON ############
@@ -97,13 +116,6 @@ ifeq ($(call cc-option-yn, -Wheader-guard),y)
 EXTRA_CFLAGS += -Wheader-guard
 endif
 
-ifeq ($(KERNEL_BUILD), 0)
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/ipc/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/dsp/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module.symvers
-endif
 
 # Module information used by KBuild framework
 obj-$(CONFIG_SND_SOC_WCD938X) += wcd938x_dlkm.o
