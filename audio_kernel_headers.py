@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, The Linux Foundation. All rights reserved.
+# Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License version 2 as published by
@@ -45,7 +45,8 @@ def gen_audio_headers(verbose, gen_dir, headers_install, unifdef, audio_include_
     for h in audio_include_uapi:
         audio_uapi_include_prefix = os.path.join(h.split('/include/uapi/')[0],
                                                  'include',
-                                                 'uapi') + os.sep
+                                                 'uapi',
+                                                 'audio') + os.sep
 
         if not run_headers_install(
                 verbose, gen_dir, headers_install, unifdef,
