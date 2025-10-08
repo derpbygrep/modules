@@ -1,13 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2016-2018, 2020 The Linux Foundation. All rights reserved.
  */
 
 #ifndef __AUDIO_PDR_H_
 #define __AUDIO_PDR_H_
 
 #include <linux/soc/qcom/pdr.h>
+
 enum {
 	AUDIO_PDR_DOMAIN_ADSP,
 	AUDIO_PDR_DOMAIN_MAX
@@ -24,14 +24,12 @@ enum {
  * domain_id - Domain to use, example: AUDIO_PDR_ADSP
  * *cb - Pointer to a callback function that will be notified of the state
  *       of the domain requested. The ioctls received by the callback are
- *       requested. The ioctls received by the callback are
  *       defined in pdr.h.
  *
  * Returns: Success: Client handle
  *          Failure: Pointer error code
  */
-void *audio_pdr_service_register(int domain_id,
-				 void (*cb)(int, char *, void *));
+void *audio_pdr_service_register(int domain_id, void (*cb)(int, char *, void *));
 
 /*
  * Use audio_pdr_service_deregister to deregister with a PDR
@@ -47,8 +45,7 @@ int audio_pdr_service_deregister(int domain_id);
 
 #else
 
-static inline void *audio_pdr_service_register(int domain_id,
-					      void (*cb)(int, char *, void *))
+static inline void *audio_pdr_service_register(int domain_id, void (*cb)(int, char *, void *))
 {
 	return NULL;
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2015-2018, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2015-2018, 2020-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -9,9 +9,9 @@
 #include <sound/soc.h>
 #include <linux/kernel.h>
 #include <linux/delay.h>
-#include <linux/mfd/wcd9xxx/wcd9xxx_registers.h>
 #include <asoc/core.h>
 #include <asoc/wcd9xxx-common-v2.h>
+#include <asoc/wcd9xxx_registers.h>
 
 #define WCD_USLEEP_RANGE 50
 #define MAX_IMPED_PARAMS 6
@@ -299,11 +299,11 @@ static bool is_native_44_1_active(struct snd_soc_component *component)
 	bool native_active = false;
 	u8 native_clk, rx1_rate, rx2_rate;
 
-	native_clk = snd_soc_component_read(component,
+	native_clk = snd_soc_component_read32(component,
 				 WCD9XXX_CDC_CLK_RST_CTRL_MCLK_CONTROL);
-	rx1_rate = snd_soc_component_read(component,
+	rx1_rate = snd_soc_component_read32(component,
 				WCD9XXX_CDC_RX1_RX_PATH_CTL);
-	rx2_rate = snd_soc_component_read(component,
+	rx2_rate = snd_soc_component_read32(component,
 				WCD9XXX_CDC_RX2_RX_PATH_CTL);
 	dev_dbg(component->dev, "%s: native_clk %x rx1_rate= %x rx2_rate= %x",
 		__func__, native_clk, rx1_rate, rx2_rate);
@@ -389,7 +389,7 @@ wcd_enable_clsh_block(struct snd_soc_component *component,
 
 static inline bool wcd_clsh_enable_status(struct snd_soc_component *component)
 {
-	return snd_soc_component_read(component, WCD9XXX_A_CDC_CLSH_CRC) &
+	return snd_soc_component_read32(component, WCD9XXX_A_CDC_CLSH_CRC) &
 				0x01;
 }
 
@@ -556,7 +556,7 @@ static void wcd_clsh_flyback_ctrl(struct snd_soc_component *component,
 			snd_soc_component_update_bits(component,
 					WCD9XXX_FLYBACK_EN,
 					0x10, 0x10);
-			vneg[0] = snd_soc_component_read(component,
+			vneg[0] = snd_soc_component_read32(component,
 					       WCD9XXX_A_ANA_RX_SUPPLIES);
 			vneg[0] &= ~(0x40);
 			vneg[1] = vneg[0] | 0x40;
@@ -745,7 +745,7 @@ static void wcd_clsh_state_lo(struct snd_soc_component *component,
 		is_enable ? "enable" : "disable");
 
 	if (mode != CLS_AB && mode != CLS_AB_HIFI) {
-		dev_err(component->dev, "%s: LO cannot be in this mode: %d\n",
+		dev_err_ratelimited(component->dev, "%s: LO cannot be in this mode: %d\n",
 			__func__, mode);
 		return;
 	}
@@ -1091,7 +1091,7 @@ static void wcd_clsh_state_hph_r(struct snd_soc_component *component,
 		is_enable ? "enable" : "disable");
 
 	if (mode == CLS_H_NORMAL) {
-		dev_err(component->dev, "%s: Normal mode not applicable for hph_r\n",
+		dev_err_ratelimited(component->dev, "%s: Normal mode not applicable for hph_r\n",
 			__func__);
 		return;
 	}
@@ -1152,7 +1152,7 @@ static void wcd_clsh_state_hph_l(struct snd_soc_component *component,
 		is_enable ? "enable" : "disable");
 
 	if (mode == CLS_H_NORMAL) {
-		dev_err(component->dev, "%s: Normal mode not applicable for hph_l\n",
+		dev_err_ratelimited(component->dev, "%s: Normal mode not applicable for hph_l\n",
 			__func__);
 		return;
 	}
@@ -1213,7 +1213,7 @@ static void wcd_clsh_state_ear(struct snd_soc_component *component,
 		is_enable ? "enable" : "disable");
 
 	if (mode != CLS_H_NORMAL) {
-		dev_err(component->dev, "%s: mode: %s cannot be used for EAR\n",
+		dev_err_ratelimited(component->dev, "%s: mode: %s cannot be used for EAR\n",
 			__func__, mode_to_str(mode));
 		return;
 	}
@@ -1246,7 +1246,7 @@ static void wcd_clsh_state_err(struct snd_soc_component *component,
 {
 	char msg[128];
 
-	dev_err(component->dev,
+	dev_err_ratelimited(component->dev,
 		"%s Wrong request for class H state machine requested to %s %s",
 		__func__, is_enable ? "enable" : "disable",
 		state_to_str(req_state, msg, sizeof(msg)));
@@ -1304,14 +1304,14 @@ void wcd_clsh_fsm(struct snd_soc_component *component,
 		new_state = old_state | req_state;
 
 		if (!wcd_clsh_is_state_valid(new_state)) {
-			dev_err(component->dev,
+			dev_err_ratelimited(component->dev,
 				"%s: Class-H not a valid new state: %s\n",
 				__func__,
 				state_to_str(new_state, msg0, sizeof(msg0)));
 			return;
 		}
 		if (new_state == old_state) {
-			dev_err(component->dev,
+			dev_err_ratelimited(component->dev,
 				"%s: Class-H already in requested state: %s\n",
 				__func__,
 				state_to_str(new_state, msg0, sizeof(msg0)));
@@ -1331,7 +1331,7 @@ void wcd_clsh_fsm(struct snd_soc_component *component,
 		new_state = old_state & (~req_state);
 		if (new_state < NUM_CLSH_STATES_V2) {
 			if (!wcd_clsh_is_state_valid(old_state)) {
-				dev_err(component->dev,
+				dev_err_ratelimited(component->dev,
 					"%s:Invalid old state:%s\n",
 					__func__,
 					state_to_str(old_state, msg0,
@@ -1339,7 +1339,7 @@ void wcd_clsh_fsm(struct snd_soc_component *component,
 				return;
 			}
 			if (new_state == old_state) {
-				dev_err(component->dev,
+				dev_err_ratelimited(component->dev,
 					"%s: Class-H already in requested state: %s\n",
 					__func__,
 					state_to_str(new_state, msg0,

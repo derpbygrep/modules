@@ -6,21 +6,13 @@ else
 	KERNEL_BUILD := 0
 endif
 
+
+
 ifeq ($(KERNEL_BUILD), 1)
 	# These are configurable via Kconfig for kernel-based builds
 	# Need to explicitly configure for Android-based builds
-	ifeq  ($(TARGET_SUPPORT), sa410m)
-		AUDIO_ROOT := $(shell pwd)/../../../../vendor/qcom/opensource/audio-kernel
-	else
-		AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-5.4
-		AUDIO_ROOT := $(AUDIO_BLD_DIR)/techpack/audio
-	endif
-endif
-
-ifeq ($(TARGET_SUPPORT), sa410m)
-	include $(AUDIO_ROOT)/config/sa410mauto.conf
-	export
-	INCS    +=  -include $(AUDIO_ROOT)/config/sa410mautoconf.h
+	AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-5.4
+	AUDIO_ROOT := $(AUDIO_BLD_DIR)/techpack/audio
 endif
 
 ifeq ($(KERNEL_BUILD), 0)
@@ -38,12 +30,24 @@ ifeq ($(KERNEL_BUILD), 0)
 		include $(AUDIO_ROOT)/config/konaauto.conf
 		INCS    +=  -include $(AUDIO_ROOT)/config/konaautoconf.h
 	endif
+	ifeq ($(CONFIG_ARCH_WAIPIO), y)
+		include $(AUDIO_ROOT)/config/waipioauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/waipioautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_HOLI), y)
+		include $(AUDIO_ROOT)/config/holiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/holiautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_BLAIR), y)
+		include $(AUDIO_ROOT)/config/holiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/holiautoconf.h
+	endif
 	ifeq ($(CONFIG_ARCH_LITO), y)
 		include $(AUDIO_ROOT)/config/litoauto.conf
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
 	endif
-	ifeq ($(CONFIG_ARCH_BENGAL), y)
+	ifeq ($(CONFIG_ARCH_KHAJE), y)
 		include $(AUDIO_ROOT)/config/bengalauto.conf
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/bengalautoconf.h
@@ -72,7 +76,7 @@ endif
 # config.
 
 ############ UAPI ############
-UAPI_DIR :=	uapi
+UAPI_DIR :=	uapi/audio
 UAPI_INC :=	-I$(AUDIO_ROOT)/include/$(UAPI_DIR)
 
 ############ COMMON ############
@@ -137,14 +141,6 @@ endif
 
 ifeq ($(call cc-option-yn, -Wheader-guard),y)
 EXTRA_CFLAGS += -Wheader-guard
-endif
-
-ifeq ($(KERNEL_BUILD), 0)
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/ipc/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/dsp/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module.symvers
 endif
 
 # Module information used by KBuild framework

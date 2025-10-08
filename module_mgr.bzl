@@ -1,12 +1,6 @@
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
 load("//build/kernel/kleaf:kernel.bzl", "ddk_module",
-                                        "ddk_submodule",
-                                        "kernel_uapi_headers_cc_library")
-def get_target_arch(target):
-    if target == "mdm9607":
-        return "arm"
-    else:
-        return "arm64"
+                                        "ddk_submodule")
 
 def _create_module_conditional_src_map(conditional_srcs):
     processed_conditional_srcs = {}
@@ -54,23 +48,28 @@ def _combine_target_module_options(enabled_modules, config_options):
 
     return all_options | modules_options
 
-def _define_target_modules(target, variant, registry, modules, product = None, config_options = []):
+def _define_target_modules(target, variant, registry, modules, product = None, config_options = [],lunch_target=None):
+
+    if lunch_target != None:
+        kernel_build = "{}_{}_{}".format(target, variant, lunch_target)
+    else:
+        kernel_build = "{}_{}".format(target, variant)
+
+    dist_target_name = "{}_audio_dist".format(kernel_build)
+    data = [":{}_audio".format(kernel_build)]
+
     dep_formatter = lambda s : s.replace("%t", target)\
                                 .replace("%v", variant)\
                                 .replace("%p", product if product else "")\
                                 .replace("%b", "{}_{}".format(target, variant))
-    rule_prefix = "{}_{}_{}".format(target, variant, product) if product else "{}_{}".format(target, variant)
+
     enabled_modules = _get_enabled_module_objs(registry, modules)
     options = _combine_target_module_options(enabled_modules, config_options)
-    arch = get_target_arch(target)
-    if arch == "arm":
-        headers = ["//msm-kernel:all_headers_arm"] + registry.hdrs
-    else:
-        headers = ["//msm-kernel:all_headers"] + registry.hdrs
+    headers = ["//msm-kernel:all_headers"] + registry.hdrs
     submodule_rules = []
 
     for module in enabled_modules:
-        rule_name = "{}_{}".format(rule_prefix, module.name)
+        rule_name = "{}_{}".format(kernel_build, module.name)
         srcs = _get_module_srcs(module, options)
         deps = headers + [dep_formatter(dep) for dep in module.deps]
 
@@ -88,14 +87,14 @@ def _define_target_modules(target, variant, registry, modules, product = None, c
         submodule_rules.append(rule_name)
 
     ddk_module(
-        name = "{}_modules".format(rule_prefix),
+        name = "{}_audio".format(kernel_build),
         kernel_build = "//msm-kernel:{}_{}".format(target, variant),
         deps = submodule_rules
     )
 
     copy_to_dist_dir(
-        name = "{}_modules_dist".format(rule_prefix),
-        data = [":{}_modules".format(rule_prefix)],
+        name = dist_target_name,
+        data = data,
         dist_dir = "out/target/product/{}/dlkm/lib/modules/".format(target),
         flat = True,
         wipe_dist_dir = False,
@@ -116,6 +115,7 @@ def create_module_registry(hdrs = []):
             config_option = config_option,
             deps = deps,
         )
+
     return struct(
         module_map = module_map,
         hdrs = hdrs,
@@ -123,29 +123,10 @@ def create_module_registry(hdrs = []):
         get = module_map.get,
     )
 
-def define_target_modules(target, variants, registry, modules, config_options = [], products = []):
-    for variant in variants:
-        if products:
-            for product in products:
-                _define_target_modules(target = target,
-                                       variant = variant,
-                                       registry = registry,
-                                       modules = modules,
-                                       product = product,
-                                       config_options = config_options)
-        else:
+def define_target_modules(target, variant, registry, modules, config_options = [], lunch_target=None, products = []):
             _define_target_modules(target = target,
                                    variant = variant,
                                    registry = registry,
                                    modules = modules,
-                                   config_options = config_options)
-def _define_uapi_library(target):
-    """Define a cc_library for userspace programs to use
-
-    Args:
-      target: kernel_build target name (e.g. "kalama_gki")
-    """
-    kernel_uapi_headers_cc_library(
-        name = "{}_uapi_header_library".format(target),
-        kernel_build = ":{}".format(target),
-    )
+                                   config_options = config_options,
+                                   lunch_target = lunch_target)

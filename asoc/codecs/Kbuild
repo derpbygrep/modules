@@ -9,18 +9,8 @@ endif
 ifeq ($(KERNEL_BUILD), 1)
 	# These are configurable via Kconfig for kernel-based builds
 	# Need to explicitly configure for Android-based builds
-	ifeq  ($(TARGET_SUPPORT), sa410m)
-		AUDIO_ROOT := $(shell pwd)/../../../../vendor/qcom/opensource/audio-kernel
-	else
-		AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-5.4
-		AUDIO_ROOT := $(AUDIO_BLD_DIR)/techpack/audio
-	endif
-endif
-
-ifeq ($(TARGET_SUPPORT), sa410m)
-	include $(AUDIO_ROOT)/config/sa410mauto.conf
-	export
-	INCS    +=  -include $(AUDIO_ROOT)/config/sa410mautoconf.h
+	AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-5.4
+	AUDIO_ROOT := $(AUDIO_BLD_DIR)/techpack/audio
 endif
 
 ifeq ($(CONFIG_SND_SOC_AUTO), y)
@@ -34,65 +24,94 @@ ifeq ($(CONFIG_SND_SOC_AUTO), y)
 	endif
 	ifdef CONFIG_SND_SOC_GVM
 		include $(AUDIO_ROOT)/config/gvmauto.conf
-		INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
+        INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
 	endif
-	ifdef CONFIG_SND_SOC_GVM_SA8295
-		include $(AUDIO_ROOT)/config/sa8295gvmauto.conf
-		INCS    +=  -include $(AUDIO_ROOT)/config/sa8295gvmautoconf.h
+	ifdef CONFIG_SND_SOC_SA7255
+		include $(AUDIO_ROOT)/config/sa7255auto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/sa7255autoconf.h
 	endif
 else
-	ifeq ($(KERNEL_BUILD), 0)
-		ifeq ($(CONFIG_ARCH_SM8150), y)
-			ifdef CONFIG_SND_SOC_SA8155
-				include $(AUDIO_ROOT)/config/sa8155auto.conf
-				INCS    +=  -include $(AUDIO_ROOT)/config/sa8155autoconf.h
-			else
-				include $(AUDIO_ROOT)/config/sm8150auto.conf
-				INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
-			endif
-		endif
-		ifeq ($(CONFIG_ARCH_SM6150), y)
-			ifdef CONFIG_SND_SOC_SA6155
-				include $(AUDIO_ROOT)/config/sa6155auto.conf
-				INCS    +=  -include $(AUDIO_ROOT)/config/sa6155autoconf.h
-			else
-				include $(AUDIO_ROOT)/config/sm6150auto.conf
-				INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
-			endif
-		endif
-		ifeq ($(CONFIG_ARCH_TRINKET), y)
-			include $(AUDIO_ROOT)/config/sm6150auto.conf
-			export
-			INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
-		endif
-		ifeq ($(CONFIG_ARCH_KONA), y)
-			include $(AUDIO_ROOT)/config/konaauto.conf
-			INCS    +=  -include $(AUDIO_ROOT)/config/konaautoconf.h
-		endif
-		ifeq ($(CONFIG_ARCH_LITO), y)
-			include $(AUDIO_ROOT)/config/litoauto.conf
-			export
-			INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
-		endif
-		ifeq ($(CONFIG_ARCH_BENGAL), y)
-			include $(AUDIO_ROOT)/config/bengalauto.conf
-			export
-			INCS    +=  -include $(AUDIO_ROOT)/config/bengalautoconf.h
-		endif
-		ifeq ($(CONFIG_ARCH_SDMSHRIKE), y)
+ifeq ($(KERNEL_BUILD), 0)
+	ifeq ($(CONFIG_ARCH_SM8150), y)
+		ifdef CONFIG_SND_SOC_SA8155
+			include $(AUDIO_ROOT)/config/sa8155auto.conf
+			INCS    +=  -include $(AUDIO_ROOT)/config/sa8155autoconf.h
+		else
 			include $(AUDIO_ROOT)/config/sm8150auto.conf
 			INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
 		endif
-		ifeq ($(CONFIG_ARCH_QCS405), y)
-			include $(AUDIO_ROOT)/config/qcs405auto.conf
-			export
-			INCS    +=  -include $(AUDIO_ROOT)/config/qcs405autoconf.h
-		endif
-		ifeq ($(CONFIG_QTI_QUIN_GVM), y)
-			include $(AUDIO_ROOT)/config/gvmauto.conf
-			INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_SM6150), y)
+		ifdef CONFIG_SND_SOC_SA6155
+			include $(AUDIO_ROOT)/config/sa6155auto.conf
+			INCS    +=  -include $(AUDIO_ROOT)/config/sa6155autoconf.h
+		else
+			include $(AUDIO_ROOT)/config/sm6150auto.conf
+			INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
 		endif
 	endif
+	ifeq ($(CONFIG_ARCH_TRINKET), y)
+		include $(AUDIO_ROOT)/config/sm6150auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_KONA), y)
+		include $(AUDIO_ROOT)/config/konaauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/konaautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_WAIPIO), y)
+		include $(AUDIO_ROOT)/config/waipioauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/waipioautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_KALAMA), y)
+		include $(AUDIO_ROOT)/config/kalamaauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/kalamaautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_PINEAPPLE), y)
+		include $(AUDIO_ROOT)/config/pineappleauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/pineappleautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_PITTI), y)
+		include $(AUDIO_ROOT)/config/pittiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/pittiautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_LITO), y)
+		include $(AUDIO_ROOT)/config/litoauto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_KHAJE), y)
+		include $(AUDIO_ROOT)/config/bengalauto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/bengalautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_HOLI), y)
+		include $(AUDIO_ROOT)/config/holiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/holiautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_BLAIR), y)
+		include $(AUDIO_ROOT)/config/holiauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/holiautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_SDMSHRIKE), y)
+		include $(AUDIO_ROOT)/config/sm8150auto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_QCS405), y)
+		include $(AUDIO_ROOT)/config/qcs405auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/qcs405autoconf.h
+	endif
+	ifeq ($(CONFIG_QTI_QUIN_GVM), y)
+		include $(AUDIO_ROOT)/config/gvmauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_SDXLEMUR), y)
+		include $(AUDIO_ROOT)/config/sdxlemurauto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/sdxlemurautoconf.h
+	endif
+endif
 endif
 
 # As per target team, build is done as follows:
@@ -112,7 +131,7 @@ endif
 # config.
 
 ############ UAPI ############
-UAPI_DIR :=	uapi
+UAPI_DIR :=	uapi/audio
 UAPI_INC :=	-I$(AUDIO_ROOT)/include/$(UAPI_DIR)
 
 ############ COMMON ############
@@ -145,10 +164,8 @@ ifdef CONFIG_SND_SOC_WCD9XXX_V2
 ifdef CONFIG_WCD9XXX_CODEC_CORE
 	WCD9XXX_OBJS += wcd9xxx-common-v2.o
 	WCD9XXX_OBJS += wcd9xxx-resmgr-v2.o
-	ifndef CONFIG_ARCH_SA410M
 	WCD9XXX_OBJS += wcd-dsp-utils.o
-	endif
-	WCD9XXX_OBJS += wcd-clsh.o
+	WCD9XXX_OBJS += wcd-dsp-mgr.o
 else
 	WCD9XXX_OBJS += wcd-clsh.o
 endif
@@ -173,6 +190,7 @@ ifdef CONFIG_SND_SOC_SWR_DMIC
 endif
 
 ifdef CONFIG_SND_SOC_WSA881X_ANALOG
+	INCS += -include $(KERNEL_SRC)/drivers/base/regmap/internal.h
 	WSA881X_ANALOG_OBJS += wsa881x-analog.o
 	WSA881X_ANALOG_OBJS += wsa881x-tables-analog.o
 	WSA881X_ANALOG_OBJS += wsa881x-regmap-analog.o
@@ -216,11 +234,15 @@ ifdef CONFIG_SND_SWR_HAPTICS
 	SWR_HAP_OBJS += swr-haptics.o
 endif
 
+ifdef CONFIG_LPASS_BT_SWR
+	LPASS_BT_SWR_OBJS += lpass-bt-swr.o
+endif
+
 LINUX_INC +=	-Iinclude/linux
 
 INCS +=		$(COMMON_INC) \
-		$(UAPI_INC) \
-		-I$(KERNEL_SRC)/drivers/base/regmap
+		$(UAPI_INC)
+
 
 EXTRA_CFLAGS += $(INCS)
 
@@ -250,19 +272,18 @@ ifeq ($(call cc-option-yn, -Wheader-guard),y)
 EXTRA_CFLAGS += -Wheader-guard
 endif
 
-ifeq ($(KERNEL_BUILD), 0)
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/ipc/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/dsp/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module.symvers
-endif
-
 ifeq ($(KERNEL_BUILD), 1)
 	obj-y	+= wcd934x/
 	obj-y	+= wcd937x/
 	obj-y	+= wcd938x/
+	obj-y	+= wcd939x/
+	obj-y	+= wcd9378/
 	obj-y	+= bolero/
+	obj-y	+= lpass-cdc/
+	obj-y	+= wsa884x/
 	obj-y	+= wsa883x/
 	obj-y	+= rouleur/
+	obj-y	+= ./
 endif
 # Module information used by KBuild framework
 obj-$(CONFIG_WCD9XXX_CODEC_CORE) += wcd_core_dlkm.o
@@ -296,13 +317,14 @@ wcd_spi_dlkm-y := $(SPI_OBJS)
 obj-$(CONFIG_SND_SOC_WCD_MBHC) += mbhc_dlkm.o
 mbhc_dlkm-y := $(MBHC_OBJS)
 
-
 obj-$(CONFIG_SND_SOC_MSM_HDMI_CODEC_RX) += hdmi_dlkm.o
 hdmi_dlkm-y := $(HDMICODEC_OBJS)
 
-
 obj-$(CONFIG_SND_SWR_HAPTICS) += swr_haptics_dlkm.o
 swr_haptics_dlkm-y := $(SWR_HAP_OBJS)
+
+obj-$(CONFIG_LPASS_BT_SWR) += lpass_bt_swr_dlkm.o
+lpass_bt_swr_dlkm-y := $(LPASS_BT_SWR_OBJS)
 
 # inject some build related information
 DEFINES += -DBUILD_TIMESTAMP=\"$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')\"
