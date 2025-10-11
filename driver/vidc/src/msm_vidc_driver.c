@@ -1613,6 +1613,13 @@ int msm_vidc_set_auto_framerate(struct msm_vidc_inst *inst, u64 timestamp)
 	struct msm_vidc_core *core;
 	struct msm_vidc_timestamp *ts;
 	struct msm_vidc_timestamp *prev = NULL;
+// #ifdef OPLUS_BUG_STABILITY
+	struct v4l2_format *out_f = NULL;
+	u32 output_width = 1080;
+	u32 output_height = 1920;
+	u32 max_video_load = 0;
+	u32 fpsLimit = 0;
+// #endif /* OPLUS_BUG_STABILITY */
 	u32 counter = 0, prev_fr = 0, curr_fr = 0;
 	u64 time_us = 0;
 	int rc = 0;
@@ -1627,6 +1634,17 @@ int msm_vidc_set_auto_framerate(struct msm_vidc_inst *inst, u64 timestamp)
 	if (rc)
 		goto exit;
 
+// #ifdef OPLUS_BUG_STABILITY
+// only applyed for encoder
+	if (is_encode_session(inst)) {
+		out_f = &inst->fmts[OUTPUT_PORT];
+		output_width = ALIGN(out_f->fmt.pix_mp.width, 16);
+		output_height = ALIGN(out_f->fmt.pix_mp.height, 16);
+		max_video_load = core->capabilities[MAX_MBPS].value;
+		fpsLimit = ((max_video_load * 16 * 16) / (output_width * output_height) / 4 * 3) << 16;
+	}
+// #endif /* OPLUS_BUG_STABILITY */
+
 	list_for_each_entry(ts, &inst->timestamps.list, sort.list) {
 		if (prev) {
 			time_us = ts->sort.val - prev->sort.val;
@@ -1635,6 +1653,16 @@ int msm_vidc_set_auto_framerate(struct msm_vidc_inst *inst, u64 timestamp)
 					inst->auto_framerate;
 			if (curr_fr > inst->capabilities[FRAME_RATE].max)
 				curr_fr = inst->capabilities[FRAME_RATE].max;
+		// #ifdef OPLUS_BUG_STABILITY
+		// limit fps accroding to resolution
+			if (is_encode_session(inst)) {
+				if (curr_fr > fpsLimit) {
+					i_vpr_l(inst, "%s: limit fps: [%u, %u]  %u -> %u with max load: %u\n",
+						__func__, output_width, output_height, curr_fr >> 16, fpsLimit >> 16, max_video_load);
+					curr_fr = fpsLimit;
+				}
+			}
+		// #endif /* OPLUS_BUG_STABILITY */
 		}
 		prev = ts;
 		counter++;
@@ -1642,6 +1670,11 @@ int msm_vidc_set_auto_framerate(struct msm_vidc_inst *inst, u64 timestamp)
 
 	if (counter < ENC_FPS_WINDOW)
 		goto exit;
+
+	if (curr_fr > inst->capabilities[FRAME_RATE].value) {
+		i_vpr_l(inst, "%s: fps: %u limitted to client fps.\n", __func__, curr_fr >> 16);
+		curr_fr = inst->capabilities[FRAME_RATE].value;
+	}
 
 	/* if framerate changed and stable for 2 frames, set to firmware */
 	if (curr_fr == prev_fr && curr_fr != inst->auto_framerate) {
@@ -4083,13 +4116,14 @@ int msm_vidc_trigger_ssr(struct msm_vidc_core *core,
 	d_vpr_e("%s: trigger ssr is called. trigger ssr val: %#llx\n",
 		__func__, trigger_ssr_val);
 
-	if (!is_ssr_type_allowed(core, trigger_ssr_val)) {
-		d_vpr_h("SSR Type %#llx is not allowed\n", trigger_ssr_val);
+	ssr->ssr_type = (trigger_ssr_val &
+			(unsigned long)SSR_TYPE) >> SSR_TYPE_SHIFT;
+
+	if (!is_ssr_type_allowed(core, ssr->ssr_type)) {
+		d_vpr_h("SSR Type %#llx is not allowed\n", ssr->ssr_type);
 		return 0;
 	}
 
-	ssr->ssr_type = (trigger_ssr_val &
-			(unsigned long)SSR_TYPE) >> SSR_TYPE_SHIFT;
 	ssr->sub_client_id = (trigger_ssr_val &
 			(unsigned long)SSR_SUB_CLIENT_ID) >> SSR_SUB_CLIENT_ID_SHIFT;
 	ssr->test_addr = (trigger_ssr_val &

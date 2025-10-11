@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of_address.h>
@@ -383,7 +383,7 @@ int handle_system_error(struct msm_vidc_core *core,
 {
 	bool bug_on = false;
 
-	d_vpr_e("%s: system error received\n", __func__);
+	d_vpr_e(FMT_STRING_SYSTEM_ERROR, __func__);
 	print_sfr_message(core);
 
 	if (pkt) {
@@ -402,7 +402,10 @@ int handle_system_error(struct msm_vidc_core *core,
 		}
 	}
 
-	msm_vidc_core_deinit(core, true);
+	core_lock(core, __func__);
+	msm_vidc_change_core_state(core, MSM_VIDC_CORE_ERROR, __func__);
+	msm_vidc_core_deinit_locked(core, true);
+	core_unlock(core, __func__);
 
 	return 0;
 }

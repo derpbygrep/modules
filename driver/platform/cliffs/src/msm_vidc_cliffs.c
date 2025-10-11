@@ -361,7 +361,11 @@ static struct msm_platform_core_capability core_data_cliffs_v1[] = {
 	{MAX_RT_MBPF, 69632}, /* (2 * ((4096x2176)/256)) */
 	{MAX_MBPF, 104448}, /* (3 * ((4096x2176)/256))*/
 	/* max_load 4096x2176@60fps*/
-	{MAX_MBPS, 2088960}, /* Concurrency: UHD@30 decode + 1080p@30 encode */
+//#ifndef OPLUS_BUG_STABILITY
+//	{MAX_MBPS, 2088960}, /* Concurrency: UHD@30 decode + 1080p@30 encode */
+//#else /* OPLUS_BUG_STABILITY*/
+	{MAX_MBPS, 2203200}, /* Concurrency: 3840x2160@60 encode + 1920x1088@30 encode */
+//#endif /* OPLUS_BUG_STABILITY */
 	{MAX_IMAGE_MBPF, 1048576},  /* (16384x16384)/256 */
 	{MAX_MBPF_HQ, 8160}, /* ((1920x1088)/256) */
 	{MAX_MBPS_HQ, 244800}, /* ((1920x1088)/256)@30fps */
@@ -4909,6 +4913,7 @@ static const struct clk_rst_table cliffs_clk_reset_table[] = {
 	{ "video_axi_reset",        0  },
 	{ "video_xo_reset",         1  },
 	{ "video_mvs0c_reset",      0  },
+	{ "video_mvs0_reset",       0  },
 };
 
 /* name, llcc_id */
@@ -5071,7 +5076,9 @@ static const u32 cliffs_vdec_output_properties_av1[] = {
 
 static const u32 cliffs_msm_vidc_ssr_type[] = {
 	HFI_SSR_TYPE_SW_ERR_FATAL,
+	HFI_SSR_TYPE_SW_DIV_BY_ZERO,
 	HFI_SSR_TYPE_CPU_WDOG_IRQ,
+	HFI_SSR_TYPE_NOC_ERROR,
 };
 
 static struct msm_vidc_efuse_data efuse_data_cliffs[] = {
@@ -5217,6 +5224,9 @@ static const struct msm_vidc_platform_data cliffs_data_v1 = {
 	.dec_output_prop_size_avc = ARRAY_SIZE(cliffs_vdec_output_properties_avc),
 	.dec_output_prop_size_hevc = ARRAY_SIZE(cliffs_vdec_output_properties_hevc),
 	.dec_output_prop_size_vp9 = ARRAY_SIZE(cliffs_vdec_output_properties_vp9),
+
+	.msm_vidc_ssr_type = cliffs_msm_vidc_ssr_type,
+	.msm_vidc_ssr_type_size = ARRAY_SIZE(cliffs_msm_vidc_ssr_type),
 
 	/* Fuse specific resources */
 	.efuse_data = efuse_data_cliffs,
